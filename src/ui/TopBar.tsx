@@ -24,7 +24,7 @@ export function TopBar() {
   return (
     <header className="pointer-events-none flex flex-col gap-2">
       <div>
-        <div className="caps text-[15px]" style={{ letterSpacing: '0.5em', fontWeight: 500 }}>Psyche</div>
+        <div className="caps flex items-baseline gap-3 text-[15px]" style={{ letterSpacing: '0.5em', fontWeight: 500 }}>Psyche<span className="text-[10px]" style={{ color: 'var(--gold)', letterSpacing: '0.2em' }}>2.0</span></div>
         <div className="serif mt-1 text-[17px] italic dim">Everything is connected. Find out how.</div>
       </div>
       {mode !== 'universe' && (

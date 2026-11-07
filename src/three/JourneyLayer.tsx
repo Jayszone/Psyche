@@ -46,8 +46,8 @@ varying float vA; void main(){ float d = length(gl_PointCoord-0.5)*2.0; float a 
 
 function buildTube(geom: JourneyGeom, styles: number[], radius: number) {
   const parts = geom.segments.map((s, i) => {
-    const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(...s.a), new THREE.Vector3(...s.c), new THREE.Vector3(...s.b))
-    const g = new THREE.TubeGeometry(curve, 56, radius, 8, false)
+    const curve = new THREE.CubicBezierCurve3(new THREE.Vector3(...s.a), new THREE.Vector3(...s.c1), new THREE.Vector3(...s.c2), new THREE.Vector3(...s.b))
+    const g = new THREE.TubeGeometry(curve, 72, radius, 8, false)
     const n = g.getAttribute('position').count
     const uv = g.getAttribute('uv')
     const aT = new Float32Array(n), aStyle = new Float32Array(n).fill(styles[i]), aLen = new Float32Array(n).fill(s.len)
@@ -60,7 +60,8 @@ function buildTube(geom: JourneyGeom, styles: number[], radius: number) {
   return parts.length ? mergeGeometries(parts, false) : null
 }
 
-const N_TRAIL = 8, N_FLOW = 6
+const N_TRAIL = 10, N_FLOW = 8
+const smoothstep = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) }
 
 /** The selected chain: a luminous tube revealed with the journey, plus particles travelling along it. */
 export function JourneyLayer() {
@@ -70,6 +71,7 @@ export function JourneyLayer() {
   const graph = useStore((s) => s.graph)
   const route = mode === 'journey' ? routes[routeIdx] : null
   const geom = journeyRuntime.geom
+  const reducedClock = useRef(0)
   const px = useRef(Math.min(2, typeof devicePixelRatio === 'number' ? devicePixelRatio : 1))
 
   const edgeStyles = useMemo(() => {
@@ -88,7 +90,7 @@ export function JourneyLayer() {
       })
       return g ? { g, m } : null
     }
-    return { core: mk(0.085, 1), halo: mk(0.3, 0.2) }
+    return { core: mk(0.07, 1), halo: mk(0.26, 0.2) }
     // geom changes with route
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, geom, edgeStyles])
@@ -112,18 +114,43 @@ export function JourneyLayer() {
     const st = useStore.getState()
     const geomNow = journeyRuntime.geom
     if (st.mode !== 'journey' || !geomNow || !st.journey) { journeyRuntime.t = 0; journeyRuntime.v = 0; (pts.g.getAttribute('aAlpha') as THREE.BufferAttribute).array.fill(0); (pts.g.getAttribute('aAlpha') as THREE.BufferAttribute).needsUpdate = true; return }
-    // Spring the continuous progress toward the integer step: smooth travel, soft arrival.
-    const target = st.journey.overview ? geomNow.steps : st.journey.step
-    if (!st.journey.ready && !st.journey.overview) { journeyRuntime.t = 0 }
-    else if (st.settings.reduced) { journeyRuntime.t = target; journeyRuntime.v = 0 }
-    else {
-      const K = 6.5, c = 2 * Math.sqrt(K)
-      journeyRuntime.v += ((target - journeyRuntime.t) * K - journeyRuntime.v * c) * Math.min(dt, 0.05)
-      journeyRuntime.t += journeyRuntime.v * Math.min(dt, 0.05)
-      if (Math.abs(target - journeyRuntime.t) < 0.0005 && Math.abs(journeyRuntime.v) < 0.001) { journeyRuntime.t = target; journeyRuntime.v = 0 }
+    const J = journeyRuntime
+    const jn = st.journey
+    const alive = jn.ready || jn.overview
+    if (!jn.ready && !jn.overview) J.t = 0
+    else if (jn.playing && !jn.overview) {
+      if (st.settings.reduced) {
+        // no continuous travel: advance one stop at a time
+        reducedClock.current += dt
+        J.t = Math.round(J.t)
+        if (reducedClock.current > 4.8) {
+          reducedClock.current = 0
+          const nxt = Math.min(geomNow.steps, Math.round(J.t) + 1)
+          useStore.setState({ journey: { ...jn, step: nxt, playing: nxt < geomNow.steps } })
+        }
+        J.t = jn.step
+      } else {
+        // continuous flow that eases through each event instead of stopping dead
+        const nearNode = Math.abs(J.t - Math.round(J.t))
+        const speed = 0.25 * (0.3 + 0.7 * smoothstep(0, 0.34, nearNode))
+        J.t = Math.min(geomNow.steps, J.t + speed * Math.min(dt, 0.05))
+        const r = Math.round(J.t)
+        if (r !== jn.step || J.t >= geomNow.steps) {
+          useStore.setState({ journey: { ...jn, step: r, playing: J.t < geomNow.steps - 0.0005 } })
+        }
+      }
+    } else {
+      const target = jn.overview ? Math.round(J.t) : jn.step
+      if (st.settings.reduced) { J.t = target; J.v = 0 }
+      else {
+        const K = 5.5, c = 2 * Math.sqrt(K)
+        J.v += ((target - J.t) * K - J.v * c) * Math.min(dt, 0.05)
+        J.t += J.v * Math.min(dt, 0.05)
+        if (Math.abs(target - J.t) < 0.0005 && Math.abs(J.v) < 0.001) { J.t = target; J.v = 0 }
+      }
     }
     const t = journeyRuntime.t
-    const prog = st.journey.ready || st.journey.overview ? t + 0.02 : 0
+    const prog = alive ? (jn.overview ? geomNow.steps + 0.05 : t + 0.02) : 0
     if (tubes?.core) tubes.core.m.uniforms.uProgress.value = prog
     if (tubes?.halo) tubes.halo.m.uniforms.uProgress.value = prog
 
@@ -132,7 +159,6 @@ export function JourneyLayer() {
     const A = pts.g.getAttribute('aAlpha') as THREE.BufferAttribute
     const time = timeUniform.value
     const moving = st.settings.reduced ? 0 : 1
-    const alive = st.journey.ready || st.journey.overview
     for (let i = 0; i < N_TRAIL; i++) {
       const tt = Math.max(0, t - i * 0.07 * (moving ? 1 : 0))
       const p = geomNow.pointAt(tt)

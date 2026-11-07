@@ -64,8 +64,8 @@ export function Hints() {
   const [visible, setVisible] = useState(true)
   useEffect(() => { setVisible(true); const t = setTimeout(() => setVisible(false), 16000); return () => clearTimeout(t) }, [mode])
   const text = mode === 'explore'
-    ? 'Drag to orbit · Scroll to zoom · Click a star to focus · Pull a star’s handle onto another to connect'
-    : mode === 'journey' ? 'Scroll or press ← → to travel along the chain · Space to play or pause · O for the whole route' : ''
+    ? 'Drag to orbit · Right-drag to pan · Scroll to move closer · W A S D to travel · Click a star to focus'
+    : mode === 'journey' ? 'Scroll or press ← → to move along the chain · Space to play or pause · O for the whole route' : ''
   if (!hints || !visible || !text || selected) return null
   return (
     <div className="pointer-events-none hidden text-center text-[11.5px] tracking-wide faint sm:block" aria-hidden="true">
@@ -92,7 +92,7 @@ export function Keys() {
       const k = e.key
       if (k === '/') { e.preventDefault(); document.querySelector<HTMLInputElement>('input[role="combobox"]')?.focus(); return }
       if (st.mode === 'journey' && st.journey) {
-        if (k === 'ArrowRight') { e.preventDefault(); st.journeyNext(); st.journeyPause() }
+        if (k === 'ArrowRight') { e.preventDefault(); st.journeyNext() }
         else if (k === 'ArrowLeft') { e.preventDefault(); st.journeyPrev() }
         else if (k === ' ' && !(t instanceof HTMLButtonElement)) { e.preventDefault(); st.journey.playing ? st.journeyPause() : st.journeyPlay() }
         else if (k === 'o' || k === 'O') st.journeyOverview()
@@ -107,9 +107,29 @@ export function Keys() {
       else if (k === '+' || k === '=') cameraController.zoom(0.8)
       else if (k === '-' || k === '_') cameraController.zoom(1.25)
       else if (k === 'r' || k === 'R') st.resetCamera()
+      else if (k === 'h' || k === 'H') st.resetCamera()
     }
-    window.addEventListener('keydown', on)
-    return () => window.removeEventListener('keydown', on)
+    const travel = (down: boolean) => (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const st = useStore.getState()
+      if (st.mode !== 'explore' || cameraController.onRail) return
+      const v = down ? 1 : 0, K = cameraController.keys
+      switch (e.key.toLowerCase()) {
+        case 'w': K.f = v; break
+        case 's': K.b = v; break
+        case 'a': K.l = v; break
+        case 'd': K.r = v; break
+        case 'e': K.u = v; break
+        case 'q': K.d = v; break
+        case 'shift': K.fast = !!down; break
+      }
+    }
+    const clear = () => { const K = cameraController.keys; K.f = K.b = K.l = K.r = K.u = K.d = 0; K.fast = false }
+    const kd = travel(true), ku = travel(false)
+    window.addEventListener('keydown', on); window.addEventListener('keydown', kd); window.addEventListener('keyup', ku); window.addEventListener('blur', clear)
+    return () => { window.removeEventListener('keydown', on); window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('blur', clear) }
   }, [])
   return null
 }

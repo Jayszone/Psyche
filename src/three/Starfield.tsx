@@ -9,7 +9,7 @@ varying vec3 vColor; varying float vTw;
 void main(){
   vec4 mv = modelViewMatrix * vec4(position,1.0);
   gl_Position = projectionMatrix * mv;
-  float att = mix(1.0, clamp(120.0 / -mv.z, 0.35, 2.2), uAtten);
+  float att = mix(1.0, clamp(300.0 / -mv.z, 0.4, 2.4), uAtten);
   gl_PointSize = max(1.0, aSize * uPx * att);
   vColor = aColor;
   vTw = 1.0 - uMotion * 0.22 * (0.5 + 0.5 * sin(uTime * (0.6 + aPhase * 0.5) + aPhase * 40.0));
@@ -63,8 +63,8 @@ function StarLayer({ count, rMin, rMax, sizeMin, sizeMax, seed, atten, dpr }: {
 export function Starfield({ density = 1, dpr = 1 }: { density?: number; dpr?: number }) {
   return (
     <>
-      <StarLayer count={Math.round(3600 * density)} rMin={700} rMax={1300} sizeMin={1.1} sizeMax={3.2} seed={11} atten={0} dpr={dpr} />
-      <StarLayer count={Math.round(520 * density)} rMin={90} rMax={420} sizeMin={1.6} sizeMax={4.2} seed={29} atten={1} dpr={dpr} />
+      <StarLayer count={Math.round(3600 * density)} rMin={900} rMax={1350} sizeMin={1.1} sizeMax={3.4} seed={11} atten={0} dpr={dpr} />
+      <StarLayer count={Math.round(1100 * density)} rMin={260} rMax={900} sizeMin={1.8} sizeMax={4.6} seed={29} atten={1} dpr={dpr} />
     </>
   )
 }

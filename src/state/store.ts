@@ -4,7 +4,7 @@ import { findPaths } from '../graph/pathfinding'
 import { placeNewNode } from '../graph/layout'
 import { buildJourneyGeom, journeyRuntime } from '../graph/journey'
 import { cameraController } from '../three/cameraController'
-import { DEMO_PAIRS } from '../data/dataset'
+import { ALL_PAIRS } from '../data/pairs'
 import type { CategoryId, CategoryMeta, FoundPath, GraphData, GraphEdge, GraphNode } from '../graph/types'
 
 export type Mode = 'universe' | 'explore' | 'journey'
@@ -14,8 +14,8 @@ export interface Journey { step: number; playing: boolean; overview: boolean; re
 export interface PendingLink { a: string; b: string; pathCount: number }
 export interface Toast { id: number; kind: 'info' | 'success' | 'warn'; msg: string }
 
-const DEFAULT_VIEW = { th: 0.66, ph: 1.2, r: 112 }
-const HOME = [-6, 22, 0] as [number, number, number]
+const DEFAULT_VIEW = { th: 0.7, ph: 1.16, r: 225 }
+const HOME = [0, 8, -4] as [number, number, number]
 
 /** Mutable, non-reactive effects shared with the renderer. */
 export const effects = {
@@ -104,11 +104,10 @@ export const useStore = create<Store>((set, get) => {
 
   const persist = () => repository.saveUserContent(get().graph)
 
-  const attachFollow = () => {
+  const attachRail = () => {
     const geom = journeyRuntime.geom
     if (!geom) return
-    cameraController.follow = () => geom.pointAt(journeyRuntime.t)
-    cameraController.followRadius = () => geom.radiusAt(journeyRuntime.t)
+    cameraController.setRail(() => geom.railAt(journeyRuntime.t))
   }
 
   const startJourney = (route: FoundPath, routes: FoundPath[], routeIdx: number) => {
@@ -117,16 +116,19 @@ export const useStore = create<Store>((set, get) => {
     journeyRuntime.geom = geom
     journeyRuntime.t = 0
     journeyRuntime.v = 0
-    cameraController.follow = null
-    const start = geom.nodes[0]
+    cameraController.releaseRail()
     set({
       mode: 'journey', routes, routeIdx, noPath: null, selectedId: null, pending: null,
       journey: { step: 0, playing: false, overview: false, ready: false },
     })
+    // Glide to the first rail pose, then hand over to the rail so the move is continuous.
+    const r0 = geom.railAt(0)
+    const dx = r0.pos[0] - r0.look[0], dy = r0.pos[1] - r0.look[1], dz = r0.pos[2] - r0.look[2]
+    const rr = Math.hypot(dx, dy, dz)
     cameraController.flyTo({
-      target: start, r: geom.radiusAt(0) + 4, th: geom.view.th, ph: geom.view.ph, duration: prefersReduced ? 0.3 : 2.6,
+      target: r0.look, r: rr, th: Math.atan2(dz, dx), ph: Math.acos(Math.max(-1, Math.min(1, dy / rr))), duration: prefersReduced ? 0.3 : 3.2,
       onDone: () => {
-        attachFollow()
+        attachRail()
         const j = get().journey
         if (j) set({ journey: { ...j, ready: true, playing: true } })
       },
@@ -156,7 +158,7 @@ export const useStore = create<Store>((set, get) => {
     enterExplore: () => {
       if (get().mode !== 'universe') return
       set({ mode: 'explore' })
-      cameraController.flyTo({ target: [0, 2, 0], r: 88, ph: 1.12, duration: 2.4 })
+      cameraController.flyTo({ target: [-48, 10, 14], r: 100, th: 1.15, ph: 1.12, duration: 3.6 })
     },
 
     focusNode: (id, opts) => {
@@ -165,8 +167,8 @@ export const useStore = create<Store>((set, get) => {
       if (get().mode === 'universe') set({ mode: 'explore' })
       set({ selectedId: id })
       if (get().mode === 'journey' && opts?.keepJourney) return
-      cameraController.follow = null
-      cameraController.flyTo({ target: n.position, r: 11 })
+      cameraController.releaseRail()
+      cameraController.flyTo({ target: n.position, r: n.importance > 0.8 ? 15 : 11 })
     },
 
     focusCategory: (c) => {
@@ -174,8 +176,8 @@ export const useStore = create<Store>((set, get) => {
       if (!cat) return
       if (get().mode === 'universe') set({ mode: 'explore' })
       set({ selectedId: null })
-      cameraController.follow = null
-      cameraController.flyTo({ target: cat.center, r: 34, ph: 1.15 })
+      cameraController.releaseRail()
+      cameraController.flyTo({ target: cat.center, r: 50, ph: 1.15 })
     },
 
     deselect: () => {
@@ -185,14 +187,14 @@ export const useStore = create<Store>((set, get) => {
       if (mode === 'explore') {
         const n = nodeById.get(selectedId)
         const cat = n && get().categories.find((c) => c.id === n.category)
-        if (n && cat && cameraController.goal.r < 24) cameraController.flyTo({ target: n.category === 'user' ? n.position : cat.center, r: 34 })
+        if (n && cat && cameraController.goal.r < 24) cameraController.flyTo({ target: n.category === 'user' ? n.position : cat.center, r: 50 })
       }
     },
 
     resetCamera: () => {
       if (get().mode === 'journey') { get().journeyOverview(true); return }
       set({ selectedId: null })
-      cameraController.follow = null
+      cameraController.releaseRail()
       cameraController.flyTo({ target: HOME, ...DEFAULT_VIEW, duration: 2.4 })
     },
 
@@ -210,7 +212,7 @@ export const useStore = create<Store>((set, get) => {
       if (!routes.length) {
         if (get().mode === 'universe') set({ mode: 'explore' })
         set({ noPath: { from: a, to: b }, routes: [], journey: null })
-        cameraController.follow = null
+        cameraController.releaseRail()
         const A = get().nodeById.get(a)!, B = get().nodeById.get(b)!
         const mid: [number, number, number] = [(A.position[0] + B.position[0]) / 2, (A.position[1] + B.position[1]) / 2, (A.position[2] + B.position[2]) / 2]
         cameraController.flyTo({ target: mid, r: Math.min(120, Math.hypot(A.position[0] - B.position[0], A.position[1] - B.position[1], A.position[2] - B.position[2]) * 1.3 + 18) })
@@ -221,7 +223,7 @@ export const useStore = create<Store>((set, get) => {
     },
 
     runDemo: (id) => {
-      const d = DEMO_PAIRS.find((p) => p.id === id)
+      const d = ALL_PAIRS.find((p) => p.id === id)
       if (d) get().trace(d.from, d.to, d.via)
     },
 
@@ -234,25 +236,25 @@ export const useStore = create<Store>((set, get) => {
     journeyNext: () => {
       const { journey } = get(); const geom = journeyRuntime.geom
       if (!journey || !geom) return
-      if (journey.step >= geom.steps) { set({ journey: { ...journey, playing: false } }); return }
-      set({ journey: { ...journey, step: journey.step + 1, playing: journey.playing && journey.step + 1 < geom.steps } })
+      const next = Math.min(geom.steps, Math.floor(journeyRuntime.t + 0.02) + 1)
+      set({ journey: { ...journey, step: next, playing: false } })
     },
     journeyPrev: () => {
       const { journey } = get(); if (!journey) return
-      set({ journey: { ...journey, step: Math.max(0, journey.step - 1), playing: false } })
+      set({ journey: { ...journey, step: Math.max(0, Math.ceil(journeyRuntime.t - 0.02) - 1), playing: false } })
     },
-    journeyGoto: (s) => {
+    journeyGoto: (st) => {
       const { journey } = get(); const geom = journeyRuntime.geom
       if (!journey || !geom) return
-      set({ journey: { ...journey, step: Math.max(0, Math.min(geom.steps, s)), playing: false } })
+      set({ journey: { ...journey, step: Math.max(0, Math.min(geom.steps, st)), playing: false } })
     },
     journeyPlay: () => {
       const { journey } = get(); const geom = journeyRuntime.geom
       if (!journey || !geom) return
-      const step = journey.step >= geom.steps ? 0 : journey.step
-      set({ journey: { ...journey, step, playing: true } })
+      if (journeyRuntime.t >= geom.steps - 0.01) { journeyRuntime.t = 0; journeyRuntime.v = 0 }
+      set({ journey: { ...journey, step: Math.round(journeyRuntime.t), playing: true } })
     },
-    journeyPause: () => { const { journey } = get(); if (journey) set({ journey: { ...journey, playing: false } }) },
+    journeyPause: () => { const { journey } = get(); if (journey) set({ journey: { ...journey, playing: false, step: Math.round(journeyRuntime.t) } }) },
     journeyRestart: () => {
       const { journey } = get(); if (!journey) return
       journeyRuntime.t = 0; journeyRuntime.v = 0
@@ -263,23 +265,27 @@ export const useStore = create<Store>((set, get) => {
       const { journey } = get(); const geom = journeyRuntime.geom
       if (!journey || !geom) return
       const next = on ?? !journey.overview
-      set({ journey: { ...journey, overview: next, playing: next ? false : journey.playing } })
+      set({ journey: { ...journey, overview: next, playing: next ? false : journey.playing, step: Math.round(journeyRuntime.t) } })
+      const aim = (t: number) => {
+        const p = geom.railAt(t)
+        const dx = p.pos[0] - p.look[0], dy = p.pos[1] - p.look[1], dz = p.pos[2] - p.look[2]
+        const rr = Math.hypot(dx, dy, dz) || 1
+        return { look: p.look, rr, th: Math.atan2(dz, dx), ph: Math.acos(Math.max(-1, Math.min(1, dy / rr))) }
+      }
       if (next) {
-        cameraController.follow = null
-        cameraController.flyTo({ target: geom.bounds.center, r: Math.min(130, Math.max(26, geom.bounds.size * 1.6)), th: geom.view.th, ph: geom.view.ph, duration: 2 })
+        const m = aim(geom.steps * 0.5)
+        cameraController.flyTo({ target: geom.bounds.center, r: Math.min(420, Math.max(46, geom.bounds.size * 1.25)), th: m.th, ph: Math.min(1.35, m.ph), duration: 2.4 })
       } else {
-        cameraController.flyTo({
-          target: geom.pointAt(journeyRuntime.t), r: geom.radiusAt(journeyRuntime.t), th: geom.view.th, ph: geom.view.ph, duration: 1.8, onDone: attachFollow,
-        })
+        const m = aim(journeyRuntime.t)
+        cameraController.flyTo({ target: m.look, r: m.rr, th: m.th, ph: m.ph, duration: 2, onDone: attachRail })
       }
     },
     exitJourney: () => {
       if (get().mode !== 'journey') return
-      cameraController.follow = null
-      cameraController.followRadius = null
+      cameraController.releaseRail()
       journeyRuntime.geom = null
       set({ mode: 'explore', journey: null, selectedId: null })
-      cameraController.flyTo({ target: HOME, ...DEFAULT_VIEW, duration: 2.6 })
+      cameraController.flyTo({ target: HOME, ...DEFAULT_VIEW, duration: 3 })
     },
 
     openAdd: (label) => set({ addDraft: label }),

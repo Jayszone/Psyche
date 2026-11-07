@@ -12,7 +12,8 @@ export default {
         gold: '#E8BE79',
       },
       fontFamily: {
-        serif: ['"Instrument Serif"', 'Georgia', 'serif'],
+        serif: ['"Cormorant Garamond"', 'Georgia', 'serif'],
+        display: ['Cinzel', 'Georgia', 'serif'],
         sans: ['"Hanken Grotesk"', 'system-ui', 'sans-serif'],
       },
     },

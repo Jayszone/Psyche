@@ -23,17 +23,20 @@ export function layoutGraph(raw: RawGraph, categories: CategoryMeta[]): GraphDat
   byCat.forEach((idxs, cat) => {
     const c = centers.get(cat as never) ?? [0, 0, 0]
     const k = idxs.length
-    const R = 4.4 + 1.15 * Math.sqrt(k)
-    idxs.forEach((nodeIdx, i) => {
+    const R = 5.2 + 1.5 * Math.sqrt(k)
+    // Most important nodes sit nearer the core; minor ones drift to the cluster's edge.
+    const order = [...idxs].sort((x, y) => nodes[y].importance - nodes[x].importance)
+    order.forEach((nodeIdx, i) => {
       const n = nodes[nodeIdx]
       const y = 1 - (2 * (i + 0.5)) / k
       const rad = Math.sqrt(Math.max(0, 1 - y * y))
       const theta = i * 2.399963 + hash01(cat) * 6.28
-      const jitter = 0.7 + 0.3 * hash01(n.id)
+      const shell = 0.35 + 0.65 * Math.sqrt((i + 0.5) / k)
+      const jitter = 0.82 + 0.36 * hash01(n.id)
       n.position = [
-        c[0] + Math.cos(theta) * rad * R * jitter,
-        c[1] + y * R * 0.62 * jitter,
-        c[2] + Math.sin(theta) * rad * R * jitter,
+        c[0] + Math.cos(theta) * rad * R * shell * jitter,
+        c[1] + y * R * 0.8 * shell * jitter,
+        c[2] + Math.sin(theta) * rad * R * shell * jitter,
       ]
     })
   })

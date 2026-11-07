@@ -5,10 +5,11 @@ import { cameraController } from './cameraController'
 import { MAX_NODES, pickNodeAt, proj } from './projection'
 import { baseNodeSize, motionUniform, nodeScale, scaleForRadius, timeUniform } from './scale'
 import { effects, useStore, type ZoomLevel } from '../state/store'
+import { REGIONS } from '../data/dataset'
 
 export const ui = { handleHot: false }
 
-const levelFor = (r: number): ZoomLevel => (r > 74 ? 'universe' : r > 24 ? 'constellation' : 'focus')
+const levelFor = (r: number): ZoomLevel => (r > 150 ? 'universe' : r > 34 ? 'constellation' : 'focus')
 
 /** Drives the camera, mirrors node positions to screen space for HTML overlays, and handles pointer input. */
 export function RigAndInput() {
@@ -21,24 +22,31 @@ export function RigAndInput() {
   useEffect(() => {
     const el = gl.domElement
     const pointers = new Map<number, { x: number; y: number }>()
-    let downAt = 0, moved = 0, pinch = 0, wheelAcc = 0, wheelLock = 0
+    let downAt = 0, moved = 0, pinch = 0, wheelAcc = 0, wheelLock = 0, lastT = 0, panning = false
 
     const down = (e: PointerEvent) => {
       el.setPointerCapture(e.pointerId)
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
-      if (pointers.size === 1) { downAt = performance.now(); moved = 0; orbiting.current = true }
+      if (pointers.size === 1) { downAt = performance.now(); moved = 0; orbiting.current = true; lastT = e.timeStamp; panning = e.button === 2 || e.shiftKey; cameraController.stopInertia() }
       if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y) }
       el.style.cursor = 'grabbing'
     }
     const move = (e: PointerEvent) => {
       effects.pointer.x = e.clientX; effects.pointer.y = e.clientY; inside.current = true
+      cameraController.sway.x = (e.clientX / Math.max(1, window.innerWidth) - 0.5) * 2
+      cameraController.sway.y = (e.clientY / Math.max(1, window.innerHeight) - 0.5) * 2
       const prev = pointers.get(e.pointerId)
       if (!prev) return
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
       if (pointers.size === 1) {
         const dx = e.clientX - prev.x, dy = e.clientY - prev.y
         moved += Math.abs(dx) + Math.abs(dy)
-        if (moved > 3) cameraController.orbit(dx * 0.0055, dy * 0.0045)
+        const dtm = Math.max(0.004, (e.timeStamp - lastT) / 1000); lastT = e.timeStamp
+        if (moved > 3) {
+          if (useStore.getState().mode === 'journey' && cameraController.onRail) { /* the rail owns the view; dragging does nothing */ }
+          else if (panning) { const k = cameraController.cur.r * 0.0016; cameraController.pan(-dx * k, dy * k) }
+          else cameraController.orbit(dx * 0.0055, dy * 0.0045, dtm)
+        }
       } else if (pointers.size === 2) {
         const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y)
         if (pinch > 0) { cameraController.zoom(pinch / d); moved += 10 }
@@ -48,7 +56,7 @@ export function RigAndInput() {
     const up = (e: PointerEvent) => {
       const had = pointers.has(e.pointerId)
       pointers.delete(e.pointerId)
-      if (!pointers.size) { orbiting.current = false; el.style.cursor = '' }
+      if (!pointers.size) { orbiting.current = false; el.style.cursor = ''; cameraController.releaseOrbit() }
       if (!had || pointers.size) return
       if (moved < 6 && performance.now() - downAt < 600) {
         const idx = pickNodeAt(e.clientX, e.clientY)
@@ -63,7 +71,14 @@ export function RigAndInput() {
         }
       }
     }
-    const leave = () => { inside.current = false }
+    const leave = () => { inside.current = false; cameraController.sway.x = 0; cameraController.sway.y = 0 }
+    const ctx = (e: Event) => e.preventDefault()
+    const dbl = (e: MouseEvent) => {
+      const st = useStore.getState()
+      if (st.mode === 'universe' || st.mode === 'journey') return
+      const idx = pickNodeAt(e.clientX, e.clientY)
+      if (idx >= 0) st.focusNode(proj.ids[idx]); else cameraController.dolly(cameraController.goal.r * 0.45)
+    }
     const wheel = (e: WheelEvent) => {
       e.preventDefault()
       const st = useStore.getState()
@@ -73,23 +88,25 @@ export function RigAndInput() {
         const now = performance.now()
         if (Math.abs(wheelAcc) > 60 && now > wheelLock) {
           wheelLock = now + 650
-          if (wheelAcc > 0) st.journeyNext(); else st.journeyPrev()
-          st.journeyPause()
+          wheelAcc = 0
+          if (e.deltaY > 0) st.journeyNext(); else st.journeyPrev()
         }
         if (Math.abs(wheelAcc) > 400) wheelAcc = 0
         return
       }
       wheelAcc = 0
       if (st.mode === 'universe') return
-      cameraController.zoom(Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0013)))
+      cameraController.zoom(Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)))
     }
     el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move)
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up)
     el.addEventListener('pointerleave', leave); el.addEventListener('wheel', wheel, { passive: false })
+    el.addEventListener('contextmenu', ctx); el.addEventListener('dblclick', dbl)
     return () => {
       el.removeEventListener('pointerdown', down); el.removeEventListener('pointermove', move)
       el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up)
       el.removeEventListener('pointerleave', leave); el.removeEventListener('wheel', wheel)
+      el.removeEventListener('contextmenu', ctx); el.removeEventListener('dblclick', dbl)
     }
   }, [gl])
 
@@ -98,6 +115,7 @@ export function RigAndInput() {
     timeUniform.value += dt
     motionUniform.value = st.settings.reduced ? 0 : 1
     cameraController.drift = st.mode === 'universe'
+    cameraController.reducedMotion = st.settings.reduced
     cameraController.update(dt, camera as THREE.PerspectiveCamera)
     camera.updateMatrixWorld()
     const r = cameraController.cur.r
@@ -121,7 +139,7 @@ export function RigAndInput() {
       proj.x[i] = (v.current.x * 0.5 + 0.5) * W
       proj.y[i] = (-v.current.y * 0.5 + 0.5) * H
       proj.depth[i] = dist
-      proj.radius[i] = (baseNodeSize(node.importance) * nodeScale.value * 1.3 * pxPerUnit) / Math.max(dist, 0.1)
+      proj.radius[i] = (baseNodeSize(node.importance) * nodeScale.value * 1.1 * pxPerUnit) / Math.max(dist, 0.1)
       proj.visible[i] = v.current.z < 1 && proj.x[i] > -40 && proj.x[i] < W + 40 && proj.y[i] > -40 && proj.y[i] < H + 40 ? 1 : 0
     }
     st.categories.forEach((c, i) => {
@@ -131,6 +149,10 @@ export function RigAndInput() {
       proj.cat.visible[i] = v.current.z < 1 ? 1 : 0
     })
 
+    REGIONS.forEach((reg, i) => {
+      v.current.set(reg.center[0], reg.center[1], reg.center[2]).project(cam)
+      proj.reg.x[i] = (v.current.x * 0.5 + 0.5) * W; proj.reg.y[i] = (-v.current.y * 0.5 + 0.5) * H; proj.reg.visible[i] = v.current.z < 1 ? 1 : 0
+    })
     const lvl = levelFor(r)
     if (lvl !== st.zoomLevel) st.setZoomLevel(lvl)
 

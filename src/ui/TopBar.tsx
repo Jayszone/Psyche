@@ -24,8 +24,8 @@ export function TopBar() {
   return (
     <header className="pointer-events-none flex flex-col gap-2">
       <div>
-        <div className="text-[13px] font-medium uppercase tracking-[0.46em]">Psyche</div>
-        <div className="serif mt-0.5 text-[15px] italic dim">Everything is connected. Find out how.</div>
+        <div className="caps text-[15px]" style={{ letterSpacing: '0.5em', fontWeight: 500 }}>Psyche</div>
+        <div className="serif mt-1 text-[17px] italic dim">Everything is connected. Find out how.</div>
       </div>
       {mode !== 'universe' && (
         <nav aria-label="Where you are" className="pointer-events-auto flex flex-wrap items-center gap-1.5 text-[11.5px]">

@@ -30,7 +30,7 @@ export function NavControls() {
       <div className="flex gap-1.5">
         <button className="btn btn-icon panel" aria-label="Zoom in" title="Zoom in (+)" disabled={disabled} onClick={() => cameraController.zoom(0.7)}>+</button>
         <button className="btn btn-icon panel" aria-label="Zoom out" title="Zoom out (−)" disabled={disabled} onClick={() => cameraController.zoom(1 / 0.7)}>−</button>
-        <button className="btn panel" onClick={reset} title="Reset camera (R)">{mode === 'journey' ? 'Fit route' : 'Reset view'}</button>
+        <button className="btn panel" onClick={reset} title="Back to the universe overview (H)">{mode === 'journey' ? 'Fit route' : 'Home'}</button>
         <button className="btn btn-icon panel" aria-label="Display settings" aria-expanded={open} title="Display settings" onClick={() => setOpen(!open)}>⚙</button>
       </div>
     </div>

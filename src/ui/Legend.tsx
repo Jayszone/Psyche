@@ -5,11 +5,11 @@ import type { Evidence } from '../graph/types'
 const ORDER: Evidence[] = ['strong', 'plausible', 'speculative', 'user']
 
 export function Legend() {
-  const [open, setOpen] = useState(() => typeof matchMedia === 'undefined' || !matchMedia('(max-width: 900px)').matches)
+  const [open, setOpen] = useState(false)
   return (
-    <section aria-label="Legend" className="pointer-events-auto panel max-w-[270px] px-3.5 py-2.5">
+    <section aria-label="Legend" className="pointer-events-auto panel max-w-[270px] rounded-[10px] px-3.5 py-2.5">
       <button className="eyebrow flex w-full items-center justify-between border-0 bg-transparent p-0" aria-expanded={open} onClick={() => setOpen(!open)}>
-        How to read the threads <span aria-hidden="true">{open ? '–' : '+'}</span>
+        Threads <span aria-hidden="true">{open ? '–' : '+'}</span>
       </button>
       {open && (
         <>

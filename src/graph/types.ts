@@ -1,8 +1,13 @@
 /** Graph model. Pure data: nothing in this folder imports Three.js or React. */
 
 export type CategoryId =
-  | 'politics' | 'economics' | 'trade' | 'technology' | 'science'
-  | 'environment' | 'culture' | 'history' | 'food' | 'user'
+  | 'politics' | 'geopolitics' | 'trade' | 'economics' | 'finance'
+  | 'technology' | 'ai' | 'science' | 'physics' | 'mathematics' | 'space'
+  | 'biology' | 'medicine' | 'healthcare' | 'psychology' | 'sociology'
+  | 'environment' | 'climate' | 'energy' | 'agriculture' | 'food' | 'geography'
+  | 'culture' | 'art' | 'music' | 'literature' | 'philosophy' | 'religion' | 'education' | 'media'
+  | 'history' | 'transportation' | 'manufacturing' | 'sports'
+  | 'user'
 
 /** How well a relationship is supported. These are mock labels, not calibrated probabilities. */
 export type Evidence = 'strong' | 'plausible' | 'speculative' | 'user'
@@ -22,6 +27,8 @@ export interface GraphNode {
   /** 0 to 1. Drives size, brightness and label priority. */
   importance: number
   metadata?: Record<string, string>
+  /** Optional key into the event media registry (src/media). */
+  media?: string
   userCreated?: boolean
 }
 
@@ -48,7 +55,11 @@ export interface CategoryMeta {
   color: string
   center: [number, number, number]
   blurb: string
+  /** The wider region of the universe this constellation belongs to. */
+  region: string
 }
+
+export interface RegionMeta { id: string; name: string; center: [number, number, number]; members: CategoryId[] }
 
 export interface FoundPath {
   nodeIds: string[]

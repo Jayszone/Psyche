@@ -28,15 +28,14 @@ export function NodePanel() {
       {node && selectedId && (
         <motion.aside
           key={node.id} role="complementary" aria-label={'Details for ' + node.label}
-          className="pointer-events-auto panel flex max-h-full w-[min(340px,100%)] flex-col gap-3 overflow-auto p-4"
-          initial={{ opacity: 0, x: reduce ? 0 : 14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reduce ? 0 : 14 }} transition={{ duration: 0.35 }}
+          className="pointer-events-auto panel flex max-h-[44vh] w-[min(310px,100%)] flex-col gap-3 overflow-auto rounded-[10px] p-4 sm:max-h-full"
+          initial={{ opacity: 0, x: reduce ? 0 : -14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reduce ? 0 : -14 }} transition={{ duration: 0.35 }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="eyebrow flex items-center gap-2"><span className="dot" style={{ color: catColor(node.category) }} />{cat?.label}</div>
             <button className="btn btn-icon -mr-1.5 -mt-1.5 border-transparent" aria-label="Close details" onClick={() => useStore.getState().deselect()}>✕</button>
           </div>
-          <h2 className="serif m-0 text-[26px] leading-[1.1]">{node.label}</h2>
-          <p className="m-0 text-[13.5px] dim">{node.description}</p>
+          <h2 className="serif m-0 text-[22px] leading-[1.1]">{node.label}</h2>
           {node.metadata && (
             <dl className="m-0 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
               {Object.entries(node.metadata).map(([k, v]) => (<div key={k}><dt className="inline faint">{k}: </dt><dd className="m-0 inline">{v}</dd></div>))}

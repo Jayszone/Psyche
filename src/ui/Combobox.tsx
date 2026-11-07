@@ -19,10 +19,12 @@ interface Props {
   hideLabel?: boolean
   className?: string
   large?: boolean
+  /** No underline: the surrounding container supplies the field chrome. */
+  bare?: boolean
 }
 
 /** Keyboard-operable combobox over the graph's events (ARIA 1.2 pattern). */
-export function Combobox({ id, label, placeholder, value, onValue, onPick, onAdd, hideLabel, className, large }: Props) {
+export function Combobox({ id, label, placeholder, value, onValue, onPick, onAdd, hideLabel, className, large, bare }: Props) {
   const nodes = useStore((s) => s.graph.nodes)
   const uid = useId()
   const inputId = id ?? uid + '-in'
@@ -43,7 +45,7 @@ export function Combobox({ id, label, placeholder, value, onValue, onPick, onAdd
     <div className={'relative ' + (className ?? '')}>
       <label htmlFor={inputId} className={hideLabel ? 'sr-only' : 'field-label'}>{label}</label>
       <input
-        ref={ref} id={inputId} className="input" style={large ? { fontSize: 18, padding: '10px 2px' } : undefined}
+        ref={ref} id={inputId} className="input" style={{ ...(large ? { fontSize: 17, padding: '9px 2px' } : null), ...(bare ? { borderBottom: 'none', boxShadow: 'none' } : null) }}
         role="combobox" aria-expanded={open} aria-controls={listId} aria-autocomplete="list"
         aria-activedescendant={open && total ? `${uid}-o${active}` : undefined}
         autoComplete="off" spellCheck={false} placeholder={placeholder} value={value}

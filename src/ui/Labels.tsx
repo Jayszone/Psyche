@@ -3,6 +3,8 @@ import { proj } from '../three/projection'
 import { journeyRuntime } from '../graph/journey'
 import { useStore } from '../state/store'
 import { catColor } from './Combobox'
+import { portalScreen } from '../three/portal'
+import { REGIONS } from '../data/dataset'
 
 /** Labels are placed greedily by priority each frame so text never overlaps. Purely visual: the same
  *  information is reachable through search, the panel and the route list. */
@@ -12,6 +14,7 @@ export function Labels() {
   const nodeEls = useRef<(HTMLSpanElement | null)[]>([])
   const catEls = useRef<(HTMLButtonElement | null)[]>([])
   const widths = useRef<number[]>([])
+  const regEls = useRef<(HTMLDivElement | null)[]>([])
 
   useEffect(() => {
     let raf = 0
@@ -46,13 +49,18 @@ export function Labels() {
         else {
           const d = Math.hypot(n.position[0] - tx, n.position[1] - ty, n.position[2] - tz)
           if (lvl === 'focus') { if (d < 24) p = 200 + n.importance * 100 - d }
-          else if (lvl === 'constellation') { if (d < 46 && n.importance >= 0.4) p = 100 + n.importance * 100 - d * 0.5 }
-          else if (n.importance >= 0.9) p = 60 + n.importance * 10
+          else if (lvl === 'constellation') { if (d < 40 && n.importance >= 0.35) p = 100 + n.importance * 100 - d * 0.5 }
+          else if (n.importance >= 0.86) p = 60 + n.importance * 10
+          if (p > 0 && proj.alpha[i] < 0.3) p = -1
         }
         if (p > 0) cand.push({ i, p, strong })
       }
       cand.sort((a, b) => b.p - a.p)
       const placed: { x0: number; y0: number; x1: number; y1: number }[] = []
+      if (portalScreen.alpha > 0.25) {
+        const pw = portalScreen.w, ph = portalScreen.h
+        placed.push({ x0: portalScreen.x - pw / 2 - 10, y0: portalScreen.y - ph / 2 - 10, x1: portalScreen.x + pw / 2 + 10, y1: portalScreen.y + ph / 2 + 200 })
+      }
       const on = new Set<number>()
       for (const c of cand) {
         const el = nodeEls.current[c.i]; if (!el) continue
@@ -72,17 +80,26 @@ export function Labels() {
       nodeEls.current.forEach((el, i) => { if (el && !on.has(i)) el.style.opacity = '0' })
 
       // Constellation names: visible when zoomed out or at constellation scale, nearest one emphasised.
-      const showCats = !route && lvl !== 'focus' && st.mode !== 'journey'
+      const showCats = !route && lvl === 'constellation' && st.mode !== 'journey'
       categories.forEach((c, i) => {
         const el = catEls.current[i]; if (!el) return
         if (c.id === 'user') { el.style.opacity = '0'; el.style.pointerEvents = 'none'; return }
         const near = Math.hypot(c.center[0] - tx, c.center[1] - ty, c.center[2] - tz) < 28
         const cx = proj.cat.x[i], cy = proj.cat.y[i] - 62
         const inHero = hero && ((Math.abs(cx - proj.width / 2) < proj.width * 0.34 && cy < proj.height * 0.5) || cy > proj.height - 120)
-        const op = showCats && proj.cat.visible[i] && !inHero ? (lvl === 'universe' ? 0.85 : near ? 0.9 : 0.35) : 0
+        const dT = Math.hypot(c.center[0] - tx, c.center[1] - ty, c.center[2] - tz)
+        const op = showCats && proj.cat.visible[i] && !inHero && dT < 130 ? (near ? 0.95 : 0.4) : 0
         el.style.opacity = String(op)
         el.style.pointerEvents = op > 0.3 ? 'auto' : 'none'
         el.style.transform = `translate(${proj.cat.x[i] - el.offsetWidth / 2}px, ${proj.cat.y[i] - 62}px)`
+      })
+      REGIONS.forEach((r, i) => {
+        const el = regEls.current[i]; if (!el) return
+        const ry = proj.reg.y[i] - 70, rx = proj.reg.x[i]
+        const inHero = hero && ((Math.abs(rx - proj.width / 2) < proj.width * 0.4 && ry < proj.height * 0.66) || ry > proj.height - 150)
+        const op = lvl === 'universe' && !route && proj.reg.visible[i] && !inHero ? (hero ? 0.6 : 0.8) : 0
+        el.style.opacity = String(op)
+        el.style.transform = `translate(${proj.reg.x[i] - el.offsetWidth / 2}px, ${proj.reg.y[i] - 70}px)`
       })
     }
     raf = requestAnimationFrame(loop)
@@ -95,6 +112,12 @@ export function Labels() {
         <span key={n.id} ref={(el) => { nodeEls.current[i] = el; widths.current[i] = 0 }} className="node-label" aria-hidden="true">
           <span className="dot" style={{ color: catColor(n.category), display: 'inline-block', marginRight: 7, width: 5, height: 5 }} />{n.label}
         </span>
+      ))}
+      {REGIONS.map((r, i) => (
+        <div key={r.id} ref={(el) => { regEls.current[i] = el }} className="serif absolute left-0 top-0 whitespace-nowrap text-[clamp(18px,2.1vw,30px)] font-light italic" aria-hidden="true"
+          style={{ opacity: 0, transition: 'opacity .6s', color: 'rgba(232,237,248,0.85)', textShadow: '0 0 18px #050713, 0 0 4px #050713', letterSpacing: '0.01em' }}>
+          {r.name}
+        </div>
       ))}
       {categories.map((c, i) => (
         <button key={c.id} ref={(el) => { catEls.current[i] = el }} className="cat-label" style={{ color: catColor(c.id) }}

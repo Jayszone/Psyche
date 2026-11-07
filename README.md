@@ -2,12 +2,12 @@
 
 *Everything is connected. Find out how.*
 
-Psyche is an interactive 3D universe of events and ideas. Pick any two events and it traces a chain of
-possible relationships between them: a luminous thread you can travel along, step by step.
+Psyche is a living universe of knowledge. Events are luminous nodes, relationships are neural filaments, and
+a connection journey is a flight along the thread that links two things that seem unrelated.
 
-This is the **first frontend prototype**. It runs on a small, curated **mock** knowledge graph with
-deterministic pathfinding. There is no AI backend yet. Every relationship is an illustrative hypothesis,
-not a research finding, and the interface says so.
+This is a frontend prototype on a **mock knowledge graph** (184 events, 296 relationships, 34 categories)
+with deterministic pathfinding. There is no AI backend yet. Every relationship is an illustrative hypothesis,
+not a finding, and the interface says so.
 
 ## Run it
 
@@ -21,29 +21,43 @@ npm run dev
 Open the address Vite prints (usually http://localhost:5173).
 
 ```bash
-npm run build      # type-check and production build into dist/
-npm run preview    # serve the production build
+npm run build        # type-check and production build into dist/
+npm run preview      # serve the production build
 npm run typecheck
+npx tsx scripts/validate-data.ts   # check the dataset: ids, links, connectivity, demo journeys
 ```
 
 Add `?debug` to the URL to expose `window.__psyche` (store, projection, camera) for testing.
 
-## What you can do
+## What changed in 2.0
+
+- **The Neural Cosmos.** Edges are S-curved filaments with variable width and travelling electric impulses.
+  They reveal themselves by proximity and relevance, so the web never fills the screen. Evidence classes keep distinct textures.
+- **A much larger universe.** 6 regions, 34 constellations and 184 events spread over a volume you can fly through,
+  above, below, behind and far away, with spiral systems at the edge of the map for scale.
+- **Node hierarchy.** Major events (large, spiked, breathing), supporting events, and minor points that surface only when relevant. Distance fading and level of detail.
+- **Event portals.** Select an event, or arrive at one on a journey, and artwork materialises beside it in the scene, with its title and explanation.
+- **Cinematic journeys.** The camera rides a rail along the route with a look-ahead, flows continuously and eases through each event.
+- **Navigation.** Orbit with inertia, right-drag pan, `W A S D` + `Q E` travel (Shift is faster), scroll to move closer, double-click to approach,
+  an orientation chart, a regions menu, breadcrumbs and Home.
+- **Typography.** Cormorant Garamond for display and event titles, Cinzel for the wordmark and small caps, Hanken Grotesk for the interface.
+
+## Controls
 
 | Goal | How |
 | --- | --- |
-| Enter the universe | Scroll, click **Enter the universe**, search, or press Enter |
-| Orbit, zoom | Drag; scroll or pinch; arrow keys and `+` `-` |
-| Focus an event | Click a star, search for it, or click a constellation name |
-| Search | The search box (`/` focuses it). Typing an unknown name offers **Add as a new event** |
-| Trace a connection | Pick a start and a destination, then **Trace connection**, or use a **Try** shortcut |
-| Journey | Scroll, `←` `→`, or the transport buttons. Play, pause, restart, **Overview**, exit |
-| Alternative routes | **Route 1 / 2 / 3** buttons on the journey card |
-| Drag to connect | Hover or select a star, drag its small handle onto another star, release |
-| Return | **Universe** in the breadcrumb, **Reset view**, or `Esc` |
+| Enter | Scroll, **Enter the universe**, search, or Enter |
+| Orbit | Drag (it keeps its momentum) |
+| Pan | Right-drag, or Shift-drag |
+| Travel | `W A S D` forward, left, back, right; `Q` `E` down, up; Shift for speed |
+| Approach | Scroll in; double-click a star (or empty space) |
+| Focus | Click a star, search, or pick a constellation name |
+| Find your way | Orientation chart (click a dot), **Regions**, breadcrumbs, **Home** (`H`) |
+| Trace | **Trace a connection**, or pick a **Surprising journey** |
+| Journey | Scroll or `←` `→` step along; `Space` play and pause; `O` overview; routes selector; Exit |
+| Connect | Hover a star, drag its handle onto another star, release |
 
-Drag-to-connect never invents an explanation. On release you can trace an existing chain (if the dataset has
-one) or add a clearly labelled **user-defined** link. If the dataset has no chain, it says so.
+Drag-to-connect never invents an explanation. You can trace an existing chain or add a clearly marked **user-defined** link.
 
 ### Reading the threads
 
@@ -56,55 +70,75 @@ one) or add a clearly labelled **user-defined** link. If the dataset has no chai
 
 The labels are **illustrative, not calibrated probabilities.**
 
+## Adding knowledge
+
+The graph is plain data. Add a file `src/data/universe-<anything>.ts` exporting tuples and it is merged automatically:
+
+```ts
+export const EXTRA_NODES = [['moon-landing', 'Apollo 11 Moon landing', 'space', 0.8, 'The first crewed landing on the Moon in 1969.']]
+export const EXTRA_EDGES = [['apollo-program', 'moon-landing', 'causes', 'strong', 'A decade of work culminated in the landing.']]
+export const EXTRA_DEMO_PAIRS = [] // optional journeys: { id, from, to, title, blurb }
+```
+
+Node tuple: `[id, label, category, importance 0..1, description]`. Edge tuple: `[source, target, type, evidence, description]`.
+Importance sets the tier: 0.78 or more is major, 0.45 or more supporting, otherwise minor. Positions are computed from the category.
+Run `npx tsx scripts/validate-data.ts` after editing.
+
+## Event imagery
+
+`src/media/` holds the event media system.
+
+- With no image, an **abstract procedural illustration** is generated per event (about 20 motifs, chosen by event or category) and labelled
+  *conceptual artwork, not a depiction of the event*.
+- To use curated art, put a file in `public/art/` and point to it in `src/media/registry.ts`: `EVENT_MEDIA['sushi-prices'] = { src: '/art/sushi.webp' }`.
+  Images are loaded lazily, cached (least-recently-used textures are disposed), and fall back to the procedural art if they fail.
+- An image-generation or curated-library service can fill `src` per event id. Nothing is fetched speculatively and no remote URLs are required.
+
 ## Architecture
 
 ```
 src/
-  data/dataset.ts        Mock nodes, edges, categories, demo pairs. Replace this.
+  data/
+    dataset.ts           Categories, regions, the original 49 events, demo pairs
+    universe.ts          135 more events and 232 relationships (a data pack)
+    pairs.ts             Demo journeys (built in + data packs)
   graph/                 Pure TypeScript. No Three.js, no React.
-    types.ts             GraphNode, GraphEdge, FoundPath
-    repository.ts        GraphRepository interface + local implementation (+ localStorage for user content)
-    layout.ts            Deterministic constellation layout for nodes without positions
-    pathfinding.ts       Evidence-weighted Dijkstra and Yen's k-shortest routes
-    journey.ts           Route geometry (curves, camera framing) and screen-reader narration
-    geometry.ts          Edge arcs shared by the renderer and the journey
-    search.ts            Event search
-  state/store.ts         Zustand: mode, selection, routes, journey sequencing, user content
-  three/                 React Three Fiber renderer
-    cameraController.ts  Damped orbit camera with cancellable cinematic flights (plain TS)
-    RigAndInput.tsx      Camera update, pointer input, screen-space projection mirror
-    NodesLayer.tsx       All events in one instanced, shader-drawn draw call
-    EdgesLayer.tsx       All relationships as one line-segment mesh; evidence sets the dash pattern
-    JourneyLayer.tsx     Revealed tube, travelling particles, progress spring
-    Sky, Starfield, FocalBody
-  ui/                    HTML overlays (accessible, keyboard operable)
+    types.ts repository.ts layout.ts pathfinding.ts journey.ts geometry.ts search.ts
+  state/store.ts         Zustand: mode, selection, routes, journey, user content
+  three/                 React Three Fiber
+    cameraController.ts  Orbit with inertia, travel, rail and cinematic flights (plain TS)
+    RigAndInput.tsx      Camera update, input, screen-space projection mirror
+    NodesLayer.tsx       One instanced draw call; three tiers; distance fading
+    EdgesLayer.tsx       Ribbon filaments; evidence textures; impulses; relevance
+    JourneyLayer.tsx     Route tube, comet and flow particles, continuous progress
+    PortalLayer.tsx      Event artwork in the scene
+    Atmosphere.tsx       Cluster haze, drifting dust, distant galaxies
+    Sky.tsx Starfield.tsx focus.ts
+  media/                 Registry, procedural art, lazy texture loader
+  ui/                    Accessible HTML overlays
+scripts/validate-data.ts Dataset checks
 ```
 
 Key decisions:
 
-- **Graph logic is independent of rendering.** Swap `GraphRepository` for a service that returns `{nodes, edges}`
-  (positions optional) and nothing else changes. An AI service can also return a ready `FoundPath`.
-- **One camera controller, imperative.** React state decides *what* to look at; the controller owns *how* the
-  camera moves. Flights are interpolated, eased and cancel on user input. There are no teleports.
-- **Overlays read a mirrored projection**, written once per frame, so labels and the connect handle track
-  stars without re-rendering React every frame. Label collisions are resolved greedily by priority.
-- **Positions are stable.** Layout is a pure function of the data. Only brightness animates.
-- **No post-processing.** Glow is additive, shader-drawn sprites, which keeps the cost low.
-- **Quality**: `low / medium / high` set pixel ratio and star count, and a performance monitor lowers
-  resolution when frames drop. **Reduce motion** (also read from the OS) shortens flights and stops drift.
+- **Graph logic knows nothing about rendering.** Swap `GraphRepository` for a service that returns nodes and edges; positions are optional.
+- **React decides what to look at, the controller decides how the camera moves.** Everything is interpolated and cancellable.
+- **HTML overlays read a projection mirror** written once per frame, so labels, the handle and the portal caption track the scene without per-frame React renders.
+- **Detail is earned.** Edges and minor nodes fade with distance and appear when relevant; the focused node's neighbourhood is emphasised and the rest recedes.
+- **Performance.** Nodes are one instanced draw call; all edges are one mesh; atmosphere is a few dozen additive sprites; the starfield is two point layers. There is no post-processing.
+  Quality (`low / medium / high`) controls pixel ratio and particle counts, and a performance monitor lowers resolution when frames drop. **Reduce motion**
+  (also read from the OS) shortens flights, stops drift, inertia and impulses, and steps the journey one stop at a time.
 - **No WebGL?** A text version of the same data and pathfinding is shown instead.
 
 ## Mocked or limited
 
-- All knowledge is a hand-written mock dataset (49 events, 64 relationships). References are placeholders.
-- "Evidence" labels are fixed tags, not computed. Route ranking uses them only as weights.
-- New events and your links are saved in this browser's `localStorage` only.
-- Nothing is sent anywhere. There is no backend.
-- Tested in headless Chromium with software rendering. Real-GPU frame rates are not yet measured.
+- All knowledge is a hand-written mock dataset. Evidence labels are fixed tags, not computed. References are placeholders.
+- Event artwork is procedural and abstract. There are no curated images yet.
+- Your new events and links are saved in this browser's `localStorage` only. Nothing is sent anywhere.
+- Tested in headless Chromium with software rendering. Frame rates on real GPUs have not been measured.
 
 ## For the intelligence phase
 
-1. Implement `GraphRepository` against a real service (graph retrieval and generation).
-2. Have it return per-edge evidence with real references, and let `findPaths` weight by them.
-3. Replace the "add event" stub with a call that proposes links for a new node.
-4. Add an explanation endpoint for the journey card's narration.
+1. Implement `GraphRepository` against a real service (retrieval and generation), returning per-edge evidence and real references.
+2. Let `findPaths` weight by that evidence; add an explanation endpoint for the journey narration.
+3. Propose links when a user adds an event, and fill `EVENT_MEDIA[...].src` from an image service.

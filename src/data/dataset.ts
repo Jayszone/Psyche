@@ -1,4 +1,4 @@
-import type { CategoryMeta, Evidence, RawNode, RelationType, Reference } from '../graph/types'
+import type { CategoryMeta, Evidence, RawNode, RegionMeta, RelationType, Reference } from '../graph/types'
 
 /**
  * Curated MOCK dataset. Relationships are illustrative hypotheses written for the
@@ -6,18 +6,76 @@ import type { CategoryMeta, Evidence, RawNode, RelationType, Reference } from '.
  * To replace it, implement GraphRepository (src/graph/repository.ts) and return your own graph.
  */
 
-export const CATEGORIES: CategoryMeta[] = [
-  { id: 'politics',    label: 'Politics',    color: '#9984F5', center: [-30, 6, 8],     blurb: 'Elections, governments and the rules they set.' },
-  { id: 'trade',       label: 'Trade',       color: '#5BC8C9', center: [-8, -16, -22],  blurb: 'Goods, tariffs, ships and ports.' },
-  { id: 'economics',   label: 'Economics',   color: '#74B9FF', center: [14, -2, -26],   blurb: 'Money, prices, rates and energy markets.' },
-  { id: 'technology',  label: 'Technology',  color: '#A8EEFF', center: [34, 12, -2],    blurb: 'Inventions and the systems built on them.' },
-  { id: 'science',     label: 'Science',     color: '#B3B7FF', center: [24, 26, 22],    blurb: 'Discoveries and natural phenomena.' },
-  { id: 'environment', label: 'Environment', color: '#7FDB9E', center: [0, 24, 26],     blurb: 'Climate, oceans and living systems.' },
-  { id: 'culture',     label: 'Culture',     color: '#E0A1E0', center: [-24, 22, -6],   blurb: 'Taste, travel and shared ideas.' },
-  { id: 'history',     label: 'History',     color: '#9FAAC4', center: [-36, -14, -14], blurb: 'Turning points that still echo.' },
-  { id: 'food',        label: 'Food',        color: '#F2A98C', center: [10, -26, 14],   blurb: 'What we grow, catch, cook and pay for.' },
-  { id: 'user',        label: 'Your events', color: '#E8EDF8', center: [0, 0, 0],       blurb: 'Events you added yourself.' },
+/** Regions are wide areas of the universe; each holds several constellations (categories). */
+export const REGIONS: RegionMeta[] = [
+  { id: 'power', name: 'Power & Money', center: [-80, 12, 28], members: ['politics', 'geopolitics', 'trade', 'economics', 'finance', 'history'] },
+  { id: 'mind', name: 'Minds & Machines', center: [76, 40, -44], members: ['technology', 'ai', 'science', 'physics', 'mathematics', 'space'] },
+  { id: 'life', name: 'Life & Health', center: [28, -60, 72], members: ['biology', 'medicine', 'healthcare', 'psychology', 'sociology'] },
+  { id: 'earth', name: 'Earth & Sustenance', center: [-20, -36, -96], members: ['environment', 'climate', 'energy', 'agriculture', 'food', 'geography'] },
+  { id: 'culture', name: 'Human Culture', center: [-48, 76, -28], members: ['culture', 'art', 'music', 'literature', 'philosophy', 'religion', 'education', 'media'] },
+  { id: 'making', name: 'Making & Moving', center: [84, -28, 56], members: ['transportation', 'manufacturing', 'sports'] },
 ]
+
+type CatDef = [CategoryMeta['id'], string, string, string]
+const CAT_DEFS: CatDef[] = [
+  ['politics', 'Politics', '#9984F5', 'Elections, governments and the rules they set.'],
+  ['geopolitics', 'Geopolitics', '#7F8FFF', 'Power between states, alliances and borders.'],
+  ['trade', 'International Trade', '#5BC8C9', 'Goods, tariffs, ships and ports.'],
+  ['economics', 'Economics', '#74B9FF', 'Prices, wages, growth and policy.'],
+  ['finance', 'Finance', '#92A9FF', 'Money, credit, markets and risk.'],
+  ['history', 'History', '#9FAAC4', 'Turning points that still echo.'],
+  ['technology', 'Technology', '#8EE3F2', 'Inventions and the systems built on them.'],
+  ['ai', 'Artificial Intelligence', '#C3B0FF', 'Machines that learn, reason and generate.'],
+  ['science', 'Science', '#B3B7FF', 'Discoveries and the way we test ideas.'],
+  ['physics', 'Physics', '#7FA8FF', 'Matter, energy, space and time.'],
+  ['mathematics', 'Mathematics', '#A0C4FF', 'Structure, proof and pattern.'],
+  ['space', 'Space Exploration', '#D6C8FF', 'Rockets, satellites and the view from above.'],
+  ['biology', 'Biology', '#7FDB9E', 'Living things and how they work.'],
+  ['medicine', 'Medicine', '#F29BB5', 'Diagnosing, treating and preventing illness.'],
+  ['healthcare', 'Healthcare', '#FFB3C7', 'Systems that deliver and pay for care.'],
+  ['psychology', 'Psychology', '#E0A1E0', 'Minds, behaviour and feeling.'],
+  ['sociology', 'Sociology', '#D8B4F0', 'Groups, institutions and social change.'],
+  ['environment', 'Environment', '#6FD6A0', 'Oceans, forests and living systems.'],
+  ['climate', 'Climate', '#6CC9D8', 'Weather over decades and what changes it.'],
+  ['energy', 'Energy', '#F5A97F', 'Fuels, power grids and what drives them.'],
+  ['agriculture', 'Agriculture', '#B8DC7A', 'Farming, soil, seeds and harvests.'],
+  ['food', 'Food', '#F2A98C', 'What we grow, catch, cook and pay for.'],
+  ['geography', 'Geography', '#86C7B0', 'Places, terrain and how they shape life.'],
+  ['culture', 'Culture', '#E4A9E4', 'Taste, travel and shared ideas.'],
+  ['art', 'Art', '#F5A3D0', 'Painting, design and visual imagination.'],
+  ['music', 'Music', '#FFB28A', 'Sound, rhythm and performance.'],
+  ['literature', 'Literature', '#C9B5E8', 'Stories, poems and the printed word.'],
+  ['philosophy', 'Philosophy', '#B0B8E8', 'Questions about knowing, being and acting.'],
+  ['religion', 'Religion', '#E8D5A8', 'Belief, ritual and sacred tradition.'],
+  ['education', 'Education', '#9ED8F2', 'Teaching, learning and institutions.'],
+  ['media', 'Media', '#F28FA8', 'News, broadcasting and online platforms.'],
+  ['transportation', 'Transportation', '#8FB5D8', 'Ships, trains, planes and roads.'],
+  ['manufacturing', 'Manufacturing', '#B7B2C9', 'Making things at scale.'],
+  ['sports', 'Sports', '#8FE0C0', 'Competition, games and the bodies behind them.'],
+]
+
+/** Constellation centres: members of a region sit on a loose sphere around the region's centre. */
+function buildCategories(): CategoryMeta[] {
+  const out: CategoryMeta[] = []
+  const rot: Record<string, number> = { power: 0.4, mind: 1.9, life: 3.1, earth: 4.4, culture: 5.5, making: 2.6 }
+  for (const reg of REGIONS) {
+    const m = reg.members.length
+    reg.members.forEach((id, i) => {
+      const def = CAT_DEFS.find((d) => d[0] === id)!
+      const y = m === 1 ? 0 : 1 - (2 * (i + 0.5)) / m
+      const rad = Math.sqrt(Math.max(0, 1 - y * y))
+      const th = i * 2.399963 + rot[reg.id]
+      const R = 34
+      out.push({
+        id, label: def[1], color: def[2], blurb: def[3], region: reg.id,
+        center: [reg.center[0] + Math.cos(th) * rad * R, reg.center[1] + y * R * 0.85, reg.center[2] + Math.sin(th) * rad * R],
+      })
+    })
+  }
+  out.push({ id: 'user', label: 'Your events', color: '#E8EDF8', center: [0, 0, 0], blurb: 'Events you added yourself.', region: 'user' })
+  return out
+}
+export const CATEGORIES: CategoryMeta[] = buildCategories()
 
 export const RAW_NODES: RawNode[] = [
   // Politics

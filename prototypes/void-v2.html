@@ -1,0 +1,550 @@
+<title>Psyche</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap">
+<style>
+/* Layout: a full-bleed void canvas. A reticle sits at screen centre; the camera flies so a named star lands in it.
+   Overlays: brand top-left, finder top-right, one engraved plate for detail/thread, chips and zoom along the bottom.
+   Single dark look by choice: night sky, gold leaf line, ivory text, lapis for links between charts. */
+:root{
+  color-scheme:dark;
+  --void:#05060a; --panel:rgba(10,12,19,.88); --gold:#c9a75b; --gold-dim:#6f5d34; --gold-faint:rgba(201,167,91,.2);
+  --ivory:#ece4d0; --mute:#a39d8b; --lapis:#6f8fe0; --ember:#e0805a;
+  --serif:"Cormorant Garamond",Georgia,"Times New Roman",serif;
+  --caps:"Cinzel","Trajan Pro",Georgia,serif;
+}
+html,body{height:100%}
+body{margin:0;background:var(--void);color:var(--ivory);font-family:var(--serif);font-size:17px;line-height:1.4;overflow:hidden}
+#sky{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#sky.drag{cursor:grabbing}#sky.hot{cursor:pointer}
+.ui{position:absolute;inset:0;pointer-events:none;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:12px;
+  padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.ui>*{min-width:0}
+.ui button,.ui input,.ui .panel,.ui .finder,.ui .brand{pointer-events:auto}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.brand{display:flex;gap:12px;align-items:center;pointer-events:none!important}
+.brand svg{width:26px;height:30px;flex:none}
+.brand b{display:block;font:500 20px/1 var(--caps);letter-spacing:.34em;color:var(--ivory)}
+.brand i{display:block;font:italic 400 15px/1.2 var(--serif);color:var(--mute);margin-top:5px}
+
+.finder{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;background:var(--panel);padding:10px 14px 12px;
+  border:1px solid var(--gold-dim);outline:1px solid var(--gold-faint);outline-offset:3px;backdrop-filter:blur(6px);max-width:100%}
+.field{position:relative;width:min(240px,100%);min-width:0}
+.field label,.k{display:block;font:500 10px var(--caps);letter-spacing:.22em;text-transform:uppercase;color:var(--gold)}
+.field input{width:100%;box-sizing:border-box;background:transparent;border:0;border-bottom:1px solid var(--gold-dim);color:var(--ivory);
+  font:italic 400 20px var(--serif);padding:4px 0;border-radius:0}
+.field input::placeholder{color:#6d685b}
+.field input:focus{outline:none;border-bottom-color:var(--gold)}
+.field input:focus-visible{border-bottom-color:var(--ivory)}
+.arrow{align-self:flex-end;color:var(--gold-dim);font:400 18px var(--serif);padding-bottom:6px}
+.sug{position:absolute;left:0;right:0;top:100%;margin:4px 0 0;padding:4px 0;list-style:none;background:#0b0d14;border:1px solid var(--gold-dim);z-index:5;max-height:240px;overflow:auto}
+.sug li{padding:6px 10px;cursor:pointer;font:italic 400 17px/1.2 var(--serif)}
+.sug li small{display:block;font:500 9px var(--caps);letter-spacing:.2em;text-transform:uppercase;color:var(--mute);font-style:normal;margin-top:2px}
+.sug li[aria-selected="true"],.sug li:hover{background:var(--gold-faint)}
+.btn{background:transparent;color:var(--gold);border:1px solid var(--gold-dim);font:500 11px var(--caps);letter-spacing:.2em;text-transform:uppercase;padding:9px 14px;cursor:pointer;border-radius:0}
+.btn:hover{border-color:var(--gold);color:var(--ivory)}
+.btn:focus-visible,.chip:focus-visible,.zoom button:focus-visible,.step:focus-visible{outline:2px solid var(--ivory);outline-offset:2px}
+.fcol{display:flex;flex-direction:column;align-items:flex-end;gap:8px;max-width:100%;min-width:0}
+.msg{font:italic 400 15px var(--serif);color:var(--mute);margin:0;text-align:right;text-shadow:0 0 8px var(--void)}
+.msg:empty{display:none}
+
+.mid{display:flex;justify-content:flex-end;align-items:flex-start;min-height:0}
+.panel{position:relative;width:min(370px,100%);max-height:100%;overflow:auto;background:var(--panel);backdrop-filter:blur(6px);
+  border:1px solid var(--gold-dim);outline:1px solid var(--gold-faint);outline-offset:3px;padding:26px 20px 18px;display:flex;flex-direction:column;gap:14px}
+.panel[hidden]{display:none}
+.panel::before{content:"";position:absolute;left:12px;right:44px;top:8px;height:10px;opacity:.7;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='10' viewBox='0 0 18 10'%3E%3Cpath d='M0 9.5H3V.5H15V9.5H18M15 6.5H7V3.5H11' fill='none' stroke='%23c9a75b' stroke-width='1'/%3E%3C/svg%3E") repeat-x}
+.x{position:absolute;right:8px;top:4px;background:none;border:0;color:var(--gold);font:400 22px var(--serif);cursor:pointer;padding:2px 8px}
+.x:focus-visible{outline:2px solid var(--ivory)}
+.eyebrow{font:500 10px var(--caps);letter-spacing:.24em;text-transform:uppercase;color:var(--gold)}
+.panel h2{font:italic 500 28px/1.1 var(--serif);margin:2px 0 0;text-wrap:balance}
+.panel p{margin:0;text-wrap:pretty;color:#dad2bf}
+.actor{font:500 11px var(--caps);letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+.sig{display:flex;align-items:center;gap:10px;font:500 11px var(--caps);letter-spacing:.14em;color:var(--gold);font-variant-numeric:lining-nums tabular-nums}
+.sig i{flex:1;height:2px;background:var(--gold-faint);position:relative}
+.sig i b{position:absolute;inset:0 auto 0 0;background:var(--gold)}
+.rule{height:1px;background:var(--gold-faint);border:0;margin:0}
+.thread{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.step{all:unset;box-sizing:border-box;display:grid;grid-template-columns:30px 1fr;gap:6px;cursor:pointer;padding:6px 4px}
+.step:hover{background:var(--gold-faint)}
+.step .n{font:500 11px var(--caps);color:var(--gold);padding-top:4px;letter-spacing:.08em}
+.step .t{font:italic 500 19px/1.15 var(--serif)}
+.link{margin:0 0 0 34px;padding:2px 0 6px;font:400 15px/1.3 var(--serif);color:var(--mute);border-left:1px solid var(--gold-dim);padding-left:12px}
+.link.echo{border-left-style:dashed;border-left-color:var(--lapis)}
+.link.echo em{color:var(--lapis)}
+.link.weak em{color:var(--ember)}
+.link em{font:500 9px var(--caps);letter-spacing:.2em;text-transform:uppercase;font-style:normal;display:block;margin-bottom:2px}
+
+.bottom{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;max-width:100%}
+.chips .lead{font:500 10px var(--caps);letter-spacing:.22em;text-transform:uppercase;color:var(--mute);margin-right:4px}
+.chip{background:rgba(5,6,10,.7);color:var(--ivory);border:1px solid var(--gold-dim);font:italic 400 16px var(--serif);padding:5px 12px;cursor:pointer;border-radius:0}
+.chip:hover{border-color:var(--gold)}
+.zoom{display:flex;gap:6px;align-items:center}
+.zoom button{width:34px;height:34px;background:rgba(5,6,10,.7);color:var(--gold);border:1px solid var(--gold-dim);font:400 20px var(--serif);cursor:pointer;border-radius:0}
+.zoom button:hover{border-color:var(--gold);color:var(--ivory)}
+.hint{font:italic 400 14px var(--serif);color:#7b7667;margin-right:8px}
+@media (max-width:700px){
+  .mid{align-items:flex-end}.panel{max-height:34vh}.hint{display:none}
+  .brand i{display:none}.field input{font-size:18px}.field{width:100%}.fcol{align-items:stretch;width:100%}.msg{text-align:left}
+}
+@media (max-width:420px){.finder{gap:10px}.arrow{display:none}}
+</style>
+
+<canvas id="sky" role="img" aria-label="A dark star chart. Named events appear as stars; threads of cause and effect join them."></canvas>
+
+<div class="ui">
+  <div class="top">
+    <div class="brand">
+      <svg viewBox="0 0 24 28" fill="none" stroke="#c9a75b" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M12 2V26M4 3C4 14 6 18.5 12 18.5C18 18.5 20 14 20 3"/><path d="M9.5 26H14.5" stroke-width="1"/></svg>
+      <div><b>PSYCHE</b><i>Every event is a butterfly. Find where it lands.</i></div>
+    </div>
+    <div class="fcol"><form class="finder" id="finder" autocomplete="off">
+      <div class="field"><label for="from">An event</label><input id="from" placeholder="the Treaty of Versailles" role="combobox" aria-expanded="false" aria-controls="sugFrom"><ul class="sug" id="sugFrom" role="listbox" hidden></ul></div>
+      <span class="arrow" aria-hidden="true">&rarr;</span>
+      <div class="field"><label for="to">Close to you</label><input id="to" placeholder="Mumbai's municipal budget" role="combobox" aria-expanded="false" aria-controls="sugTo"><ul class="sug" id="sugTo" role="listbox" hidden></ul></div>
+      <button class="btn" type="submit" id="go">Draw the thread</button>
+      <button class="btn" type="button" id="clear">Clear</button>
+    </form>
+    <p class="msg" id="msg" role="status"></p></div>
+  </div>
+
+  <div class="mid"><aside class="panel" id="panel" hidden aria-live="polite"></aside></div>
+
+  <div class="bottom">
+    <div class="chips" id="chips"><span class="lead">Wander</span></div>
+    <div class="zoom"><span class="hint">Drag to drift, scroll to draw near</span><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">&minus;</button></div>
+  </div>
+</div>
+
+<script>
+/* ---------- the charts ---------- */
+const CHARTS = [
+ { key:"m", name:"Hermes", sub:"US midterms to Mumbai's BMC", cx:0, cy:0,
+  nodes:[
+  {id:"a",layer:0,label:"US House changes hands",alias:"US midterm elections midterms",actor:"US voters, Congress",detail:"A divided Congress changes what the White House can pass on trade, tax and spending.",holds:"Polling firms and campaign finance filings know the odds first."},
+  {id:"b",layer:1,label:"Tariff and trade odds shift",actor:"White House, USTR",detail:"A Congress that can block or investigate changes how credible new tariff threats are.",holds:"Trade lobbyists and exporters' associations read this earliest."},
+  {id:"c",layer:1,label:"Dollar and Fed expectations move",alias:"US dollar interest rates",actor:"Bond and FX desks",detail:"Divided government tends to mean less fiscal stimulus, which changes rate and dollar expectations.",holds:"Bank treasuries and the Fed itself."},
+  {id:"d",layer:2,label:"Indian IT and export stocks reprice",alias:"Nifty IT outsourcing",actor:"Nifty IT, exporters",detail:"Services exporters earn in dollars and are sensitive to US visa, outsourcing and tariff talk.",holds:"Sell-side analysts and company CFOs."},
+  {id:"e",layer:2,label:"Rupee and foreign fund flows swing",alias:"rupee FPI currency",actor:"RBI, FPIs",detail:"Risk appetite and dollar strength decide whether foreign money enters or leaves Indian markets.",holds:"RBI's reserve desk and custodian banks."},
+  {id:"f",layer:3,label:"Maharashtra's tax take shifts",alias:"state GST revenue",actor:"State finance dept",detail:"GST and corporate income in Mumbai-based firms drive the state's receipts and its transfers to cities.",holds:"The state finance department, months later."},
+  {id:"g",layer:3,label:"Mumbai property deals speed up or stall",alias:"real estate housing stamp duty",actor:"Developers, buyers",detail:"Foreign money and IT salaries feed housing demand, which drives stamp duty and property tax.",holds:"The sub-registrar's office and developer sales teams."},
+  {id:"h",layer:4,label:"BMC capital budget and project timing",alias:"Mumbai municipal corporation BMC budget roads",actor:"BMC commissioner",detail:"The corporation's roads, drains and coastal projects depend on property tax, premiums and state grants.",holds:"Only the BMC budget office sees the final numbers."}],
+  edges:[["a","b","A new House can block or probe tariff plans.",4],["a","c","Fiscal policy odds change rate expectations.",3],["b","d","Tariff and visa talk hits dollar earners.",3],["b","e","Trade risk changes foreign appetite for India.",3],["c","e","A stronger dollar pulls money out of emerging markets.",4],["d","f","IT firms' profits feed state-level tax receipts.",2],["e","g","Foreign capital reaches Mumbai real estate.",3],["e","f","The rupee changes import costs and GST collected.",2],["f","h","State grants fund part of BMC projects.",3],["g","h","Property tax and premiums fund the capital budget.",4]]},
+ { key:"w", name:"Nemesis", sub:"Versailles to the second war", cx:-2300, cy:-380,
+  nodes:[
+  {id:"a",layer:0,label:"Treaty of Versailles signed",alias:"Versailles 1919 peace treaty",actor:"Allied leaders",detail:"Germany signs under blockade threat, without a say in the terms.",holds:"The Allied delegations wrote the terms behind closed doors."},
+  {id:"b",layer:1,label:"War guilt clause and reparations",actor:"Allied governments",detail:"Germany must accept blame and pay a bill that is large and vague.",holds:"The Reparations Commission, which set the figure in 1921."},
+  {id:"c",layer:1,label:"Army cap and lost territory",actor:"Allied military boards",detail:"A 100,000 man army, lost land in the east and west, and the Rhineland demilitarised.",holds:"Border commissions and German army staff."},
+  {id:"d",layer:2,label:"Hyperinflation of 1923",alias:"Weimar inflation",actor:"Reichsbank, French army",detail:"Missed payments, the Ruhr occupation and money printing wipe out savings.",holds:"Reichsbank officials and large industrialists."},
+  {id:"e",layer:2,label:"Stab-in-the-back myth spreads",actor:"Veterans, nationalist press",detail:"The claim that Germany was betrayed at home, not beaten, gives the humiliation a villain.",holds:"The army high command knew the military facts."},
+  {id:"f",layer:3,label:"Depression ends US loans",alias:"Great Depression 1929 crash",actor:"US banks, voters",detail:"Germany's recovery ran on American credit. When it stopped, unemployment soared.",holds:"Wall Street banks and the Dawes Plan bankers."},
+  {id:"g",layer:3,label:"Weimar loses legitimacy",actor:"Parties, president",detail:"Voters see the republic as the author of the treaty and the slump.",holds:"Local party offices and voters themselves."},
+  {id:"h",layer:4,label:"Nazis take power and rearm",alias:"World War II WWII Hitler",actor:"Hitler, industrial backers",detail:"Treaty limits are broken one by one in the 1930s, and Britain and France hesitate.",holds:"Intelligence services saw rearmament long before leaders acted."}],
+  edges:[["a","b","The treaty text imposes blame and a bill.",5],["a","c","The treaty text sets military and border limits.",5],["b","d","Payment pressure meets money printing.",4],["b","e","Guilt clause fuels a story of unfair defeat.",3],["c","e","Lost land and army cuts feed resentment.",3],["d","g","Middle-class savings vanish and trust goes with them.",4],["d","f","Fragile finances leave Germany reliant on US loans.",3],["f","g","Mass unemployment deepens anger at the republic.",4],["e","h","The myth gives the Nazis a ready-made story.",3],["g","h","A discredited republic opens the door to extremes.",4]]},
+ { key:"d", name:"Demeter", sub:"A new AI chief to Indian grain", cx:300, cy:1500,
+  nodes:[
+  {id:"a",layer:0,label:"New AI chief appointed",alias:"OpenAI Anthropic head of AI",actor:"Frontier AI lab",detail:"A leadership change at a lab, announced by press release.",holds:"The board and the lab's own staff."},
+  {id:"b",layer:1,label:"Model roadmap and release pace shift",actor:"Lab research teams",detail:"A new leader may speed up, slow down or redirect what gets built.",holds:"Internal roadmaps are not public."},
+  {id:"c",layer:2,label:"Farm-tech and logistics tools change",alias:"agri-tech",actor:"Agri-tech startups",detail:"Better models make crop advice, route planning and quality grading cheaper.",holds:"Startups and farm cooperatives see early adoption."},
+  {id:"d",layer:2,label:"Compute and power demand expectations",alias:"data centres chips electricity",actor:"Chip makers, utilities",detail:"A bigger roadmap implies more data centres drawing power and water.",holds:"Cloud providers and grid operators."},
+  {id:"e",layer:3,label:"Crop forecasts and price discovery sharpen",actor:"Mandis, traders",detail:"Traders with better forecasts store and move grain with less waste.",holds:"Large commodity traders, and FCI stock data."},
+  {id:"f",layer:3,label:"Regional power and water stress",actor:"State utilities",detail:"Data centre growth competes with farms for electricity and water in some regions.",holds:"State electricity boards and groundwater agencies."},
+  {id:"g",layer:4,label:"Wheat and rice prices in India",alias:"grain prices wheat rice food inflation",actor:"Farmers, FCI, consumers",detail:"Prices are set mainly by monsoon, MSP, FCI stock and export bans.",holds:"The Ministry of Agriculture and FCI."}],
+  edges:[["a","b","A leader steers the research agenda.",3],["b","c","New tools reach agri-tech firms with a lag.",2],["b","d","Bigger models mean more compute.",2],["c","e","Better forecasts reach traders slowly.",2],["d","f","Data centres draw regional power and water.",1],["e","g","Small efficiency gains nudge prices.",1],["f","g","Local stress could touch irrigation, in theory.",1]]}
+];
+const ECHOES = [
+  ["w_f","m_c","Both turn on how freely US dollars flow abroad.",2],
+  ["d_d","m_d","Demand for AI compute changes what India's IT firms are asked to build.",2]
+];
+
+
+/* ---------- build the graph ---------- */
+const $ = id => document.getElementById(id);
+function h(tag, props, ...kids){
+  const el = document.createElement(tag);
+  for (const k in (props||{})){ if (k==="class") el.className=props[k]; else if (k.startsWith("on")) el.addEventListener(k.slice(2),props[k]); else el.setAttribute(k,props[k]); }
+  for (const c of kids.flat()) if (c!=null) el.append(c.nodeType?c:document.createTextNode(String(c)));
+  return el;
+}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t;
+const hash = s => { let n=0; for (const c of s) n=(n*31+c.charCodeAt(0))|0; return Math.abs(n); };
+const nodes=[], byId={}, edges=[];
+CHARTS.forEach(c=>{
+  const maxL=Math.max(...c.nodes.map(n=>n.layer));
+  c.nodes.forEach(n=>{
+    const same=c.nodes.filter(m=>m.layer===n.layer), i=same.indexOf(n);
+    const g={id:c.key+"_"+n.id,chart:c,layer:n.layer,label:n.label,alias:n.alias||"",actor:n.actor,detail:n.detail,holds:n.holds,
+      x:c.cx+(n.layer-maxL/2)*270+((hash(n.id+c.key)%40)-20),
+      y:c.cy+(i-(same.length-1)/2)*150+((hash(c.key+n.id)%50)-25)+(n.layer%2?18:-18)};
+    nodes.push(g); byId[g.id]=g;
+  });
+  const mine=nodes.filter(n=>n.chart===c);
+  c.mx=mine.reduce((s,n)=>s+n.x,0)/mine.length; c.my=mine.reduce((s,n)=>s+n.y,0)/mine.length;
+  c.R=Math.max(...mine.map(n=>Math.hypot(n.x-c.mx,n.y-c.my)))+150;
+  c.ends=mine.filter(n=>n.layer===maxL); c.roots=mine.filter(n=>n.layer===0);
+});
+function addEdge(f,t,m,s,echo){
+  const a=byId[f],b=byId[t]; if(!a||!b) return;
+  const dx=b.x-a.x,dy=b.y-a.y,sg=hash(f+t)%2?1:-1;
+  edges.push({from:f,to:t,mechanism:m,strength:s,echo:!!echo,cx:(a.x+b.x)/2-dy*0.13*sg,cy:(a.y+b.y)/2+dx*0.13*sg});
+}
+CHARTS.forEach(c=>c.edges.forEach(([f,t,m,s])=>addEdge(c.key+"_"+f,c.key+"_"+t,m,s,false)));
+ECHOES.forEach(([f,t,m,s])=>addEdge(f,t,m,s,true));
+
+/* ---------- state ---------- */
+const css=getComputedStyle(document.documentElement), C=n=>css.getPropertyValue(n).trim();
+const VOID=C("--void"),GOLD=C("--gold"),GOLDD=C("--gold-dim"),IVORY=C("--ivory"),MUTE=C("--mute"),LAPIS=C("--lapis");
+const rgba=(hex,a)=>{const n=parseInt(hex.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`};
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const cv=$("sky"),ctx=cv.getContext("2d");
+let W=0,H=0,DPR=1;
+const cam={x:0,y:0,z:0.2}, ZMIN=0.1, ZMAX=2.4;
+let flight=null,hover=null,selected=null,thread=null,lock=0,panelOpen=false;
+const state={from:null,to:null};
+const sx=x=>(x-cam.x)*cam.z+W/2, sy=y=>(y-cam.y)*cam.z+H/2;
+
+function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rand=rng(7), stars=Array.from({length:260},()=>({x:rand(),y:rand(),r:.3+rand()*1.0,a:.18+rand()*.55,d:.03+rand()*.2,p:rand()*6.28}));
+
+function resize(){
+  DPR=Math.min(2,devicePixelRatio||1); W=cv.clientWidth; H=cv.clientHeight;
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR); ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+/* ---------- camera ---------- */
+function flyTo(x,y,z){
+  z=clamp(z,ZMIN,ZMAX);
+  const dist=Math.hypot(x-cam.x,y-cam.y), zm=Math.max(cam.z,z);
+  const dur=reduce?10:clamp(900+dist*zm/1.3,1100,2800);
+  const dip=reduce?0:clamp(dist*zm/(Math.max(W,H)*1.4),0,0.75);
+  flight={x0:cam.x,y0:cam.y,l0:Math.log(cam.z),x1:x,y1:y,l1:Math.log(z),t0:performance.now(),dur,dip};
+  return dur;
+}
+function stepFlight(now){
+  if(!flight) return;
+  const t=(now-flight.t0)/flight.dur;
+  if(t>=1){cam.x=flight.x1;cam.y=flight.y1;cam.z=Math.exp(flight.l1);flight=null;return;}
+  const e=t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+  cam.x=lerp(flight.x0,flight.x1,e); cam.y=lerp(flight.y0,flight.y1,e);
+  cam.z=Math.exp(lerp(flight.l0,flight.l1,e)-flight.dip*Math.sin(Math.PI*t));
+}
+function fitTo(list,instant){
+  const pts=list.map(n=>typeof n==="string"?byId[n]:n);
+  const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const availW=W>900?W-400:W, z=clamp(Math.min(availW*0.78/Math.max(x1-x0+300,1),H*0.6/Math.max(y1-y0+300,1)),ZMIN,1.15);
+  const cx=(x0+x1)/2+(W>900?190/z:0), cy=(y0+y1)/2;
+  if(instant){cam.x=cx;cam.y=cy;cam.z=z;flight=null;return 0}
+  return flyTo(cx,cy,z);
+}
+function overview(instant){return fitTo(nodes.filter(n=>!n.uncharted),instant)}
+function zoomAt(px,py,f){
+  const nz=clamp(cam.z*f,ZMIN,ZMAX), wx=(px-W/2)/cam.z+cam.x, wy=(py-H/2)/cam.z+cam.y;
+  cam.z=nz; cam.x=wx-(px-W/2)/nz; cam.y=wy-(py-H/2)/nz;
+}
+
+/* ---------- drawing ---------- */
+function bez(e,t){
+  const a=byId[e.from],b=byId[e.to],u=1-t;
+  return [sx(u*u*a.x+2*u*t*e.cx+t*t*b.x), sy(u*u*a.y+2*u*t*e.cy+t*t*b.y)];
+}
+function curve(e,f,rev){
+  ctx.beginPath();
+  for(let i=0;i<=22;i++){const t=f*i/22,p=bez(e,rev?1-t:t); i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);}
+  ctx.stroke();
+}
+function drawSky(now){
+  ctx.fillStyle=VOID; ctx.fillRect(0,0,W,H);
+  CHARTS.forEach(c=>{
+    const x=sx(c.mx),y=sy(c.my),r=c.R*cam.z*1.5; if(x<-r||x>W+r||y<-r||y>H+r) return;
+    const g=ctx.createRadialGradient(x,y,0,x,y,r); g.addColorStop(0,rgba(LAPIS,.07)); g.addColorStop(.5,rgba(GOLD,.02)); g.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle=g; ctx.fillRect(x-r,y-r,2*r,2*r);
+  });
+  stars.forEach(s=>{
+    const px=(((s.x*W-cam.x*s.d*.6)%W)+W)%W, py=(((s.y*H-cam.y*s.d*.6)%H)+H)%H, tw=reduce?1:.65+.35*Math.sin(now/1300+s.p);
+    ctx.fillStyle=rgba(IVORY,s.a*tw); ctx.beginPath(); ctx.arc(px,py,s.r,0,6.283); ctx.fill();
+  });
+}
+function drawCharts(){
+  const a=clamp((.85-cam.z)/.35,0,1);
+  CHARTS.forEach(c=>{
+    const x=sx(c.mx),y=sy(c.my),r=c.R*cam.z; if(x<-r||x>W+r||y<-r||y>H+r) return;
+    ctx.save(); ctx.strokeStyle=rgba(GOLD,.2); ctx.lineWidth=1; ctx.setLineDash([1,7]);
+    ctx.beginPath(); ctx.arc(x,y,r,0,6.283); ctx.stroke(); ctx.setLineDash([]);
+    if(r<2500){ ctx.strokeStyle=rgba(GOLD,.28); for(let i=0;i<72;i++){const t=i/72*6.283,l=i%6?5:11; ctx.beginPath(); ctx.moveTo(x+Math.cos(t)*r,y+Math.sin(t)*r); ctx.lineTo(x+Math.cos(t)*(r+l),y+Math.sin(t)*(r+l)); ctx.stroke();} }
+    ctx.restore();
+    if(a>0){
+      ctx.save(); ctx.textAlign="center"; ctx.globalAlpha=a;
+      ctx.fillStyle=GOLD; ctx.font='500 17px Cinzel, Georgia, serif'; try{ctx.letterSpacing="7px"}catch(_){}
+      ctx.fillText(c.name.toUpperCase(),x+3,y-r-26);
+      try{ctx.letterSpacing="0px"}catch(_){}
+      ctx.fillStyle=MUTE; ctx.font='italic 400 16px "Cormorant Garamond", Georgia, serif'; ctx.fillText(c.sub,x,y-r-6);
+      ctx.restore();
+    }
+  });
+}
+function drawEdges(now){
+  const dimmed=thread&&!thread.none;
+  ctx.lineWidth=1;
+  edges.forEach(e=>{
+    const a=byId[e.from],b=byId[e.to],ax=sx(a.x),ay=sy(a.y),bx=sx(b.x),by=sy(b.y);
+    if(Math.max(ax,bx)<-20||Math.min(ax,bx)>W+20||Math.max(ay,by)<-20||Math.min(ay,by)>H+20) return;
+    if(e.echo){ctx.setLineDash([3,7]);ctx.strokeStyle=rgba(LAPIS,dimmed?.12:.4)}
+    else{ctx.setLineDash([]);ctx.strokeStyle=rgba(GOLD,dimmed?.07:.13+.05*e.strength)}
+    curve(e,1,false);
+  });
+  ctx.setLineDash([]);
+  if(!dimmed) return;
+  const n=thread.steps.length, p=clamp((now-thread.start)/thread.dur,0,1);
+  thread.steps.forEach((s,i)=>{
+    const f=clamp(p*n-i,0,1); if(f<=0) return;
+    ctx.strokeStyle=rgba(GOLD,.16); ctx.lineWidth=7; curve(s.e,f,s.rev);
+    ctx.strokeStyle=s.e.echo?LAPIS:GOLD; ctx.lineWidth=1.8; curve(s.e,f,s.rev);
+    if(f<1){const q=bez(s.e,s.rev?1-f:f); const g=ctx.createRadialGradient(q[0],q[1],0,q[0],q[1],14); g.addColorStop(0,rgba(IVORY,.95)); g.addColorStop(1,rgba(GOLD,0)); ctx.fillStyle=g; ctx.fillRect(q[0]-14,q[1]-14,28,28);}
+  });
+  ctx.lineWidth=1;
+}
+function litSet(now){
+  const s=new Set(); if(!thread||thread.none) return s;
+  const n=thread.steps.length,p=clamp((now-thread.start)/thread.dur,0,1);
+  s.add(thread.order[0]); thread.steps.forEach((st,i)=>{ if(p*n-i>=1) s.add(thread.order[i+1]); });
+  return s;
+}
+function wrap(t,max){
+  const w=t.split(" "),out=[]; let line="";
+  w.forEach(x=>{const test=line?line+" "+x:x; if(ctx.measureText(test).width>max&&line){out.push(line);line=x}else line=test});
+  if(line) out.push(line); return out;
+}
+function drawNodes(now){
+  const th=thread&&!thread.none, lit=litSet(now), inT=th?new Set(thread.order):null;
+  const rs=clamp(Math.sqrt(cam.z),.8,1.7);
+  nodes.forEach(n=>{
+    const x=sx(n.x),y=sy(n.y); if(x<-40||x>W+40||y<-40||y>H+40) return;
+    const on=lit.has(n.id), a=th?(inT.has(n.id)?1:.28):1, r=(n.layer===0?4.4:2.9)*rs;
+    ctx.save(); ctx.globalAlpha=a;
+    if(n.uncharted){
+      ctx.strokeStyle=rgba(MUTE,.9); ctx.setLineDash([2,3]); ctx.beginPath(); ctx.arc(x,y,r+3,0,6.283); ctx.stroke(); ctx.setLineDash([]);
+    }else{
+      const col=on?GOLD:IVORY, tw=reduce?1:.85+.15*Math.sin(now/900+n.x);
+      const g=ctx.createRadialGradient(x,y,0,x,y,r*(on?8:5)); g.addColorStop(0,rgba(col,(on?.6:.32)*tw)); g.addColorStop(1,rgba(col,0));
+      ctx.fillStyle=g; ctx.fillRect(x-r*8,y-r*8,r*16,r*16);
+      ctx.fillStyle=col; ctx.beginPath(); ctx.arc(x,y,r,0,6.283); ctx.fill();
+      ctx.strokeStyle=rgba(col,.75); ctx.lineWidth=.8; const L=r*(n.layer===0?4.2:3);
+      ctx.beginPath(); ctx.moveTo(x-L,y); ctx.lineTo(x+L,y); ctx.moveTo(x,y-L); ctx.lineTo(x,y+L); ctx.stroke();
+      if(n.layer===0){ctx.beginPath();ctx.arc(x,y,r+5,0,6.283);ctx.strokeStyle=rgba(GOLD,.5);ctx.stroke();}
+    }
+    if(hover===n.id&&selected!==n.id){ctx.strokeStyle=rgba(GOLD,.9);ctx.lineWidth=1;ctx.beginPath();ctx.arc(x,y,r+9,0,6.283);ctx.stroke();}
+    ctx.restore();
+    const show=cam.z>=.85||hover===n.id||selected===n.id||(th&&inT.has(n.id)&&(cam.z>=.55||n.id===thread.order[0]||n.id===thread.order[thread.order.length-1]))||n.uncharted||(n.layer===0&&cam.z>=.42);
+    if(show){
+      ctx.save(); ctx.globalAlpha=a; ctx.font='italic 500 17px "Cormorant Garamond", Georgia, serif'; ctx.textBaseline="middle";
+      const right=x>W-210, lines=wrap(n.label,170), lh=18, ox=right?-(r+10):(r+10);
+      ctx.textAlign=right?"right":"left"; ctx.lineJoin="round"; ctx.lineWidth=4; ctx.strokeStyle=rgba(VOID,.9);
+      lines.forEach((ln,i)=>{const yy=y+(i-(lines.length-1)/2)*lh; ctx.strokeText(ln,x+ox,yy); ctx.fillStyle=on?IVORY:rgba(IVORY,.88); ctx.fillText(ln,x+ox,yy);});
+      ctx.restore();
+    }
+  });
+}
+function drawReticle(now){
+  const cx=W/2,cy=H/2, sel=selected&&byId[selected];
+  let near=0; if(sel&&!flight){near=Math.hypot(sx(sel.x)-cx,sy(sel.y)-cy)<40?1:0}
+  lock+=(near-lock)*.12; const r=lerp(46,19,lock)+(lock>.9&&!reduce?Math.sin(now/420)*1.3:0);
+  ctx.save(); ctx.translate(cx,cy); ctx.globalAlpha=.4+.5*lock; ctx.strokeStyle=GOLD; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(0,0,r,0,6.283); ctx.stroke();
+  ctx.beginPath(); [[1,0],[-1,0],[0,1],[0,-1]].forEach(([a,b])=>{ctx.moveTo(a*(r+4),b*(r+4));ctx.lineTo(a*(r+14),b*(r+14));}); ctx.stroke();
+  ctx.setLineDash([2,6]); ctx.rotate(reduce?0:now/6000); ctx.beginPath(); ctx.arc(0,0,r+8,0,6.283); ctx.stroke();
+  ctx.restore();
+}
+function frame(now){
+  stepFlight(now); drawSky(now); drawCharts(); drawEdges(now); drawNodes(now); drawReticle(now);
+  requestAnimationFrame(frame);
+}
+
+/* ---------- search ---------- */
+function search(q,which){
+  q=q.trim().toLowerCase();
+  if(!q){
+    const pool=CHARTS.flatMap(c=>which==="to"?c.ends:c.roots);
+    return pool.map(n=>({kind:"node",id:n.id,label:n.label,sub:n.chart.name,score:0}));
+  }
+  const toks=q.split(/\s+/).filter(t=>t.length>1), out=[];
+  const sc=hay=>{hay=hay.toLowerCase(); if(hay.startsWith(q))return 100; if(hay.includes(q))return 70;
+    if(toks.length&&toks.every(t=>hay.includes(t)))return 55; return toks.filter(t=>t.length>2&&hay.includes(t)).length*18};
+  nodes.forEach(n=>{const s=sc(n.label+" "+n.alias); if(s>0) out.push({kind:"node",id:n.id,label:n.label,sub:n.uncharted?"Uncharted":n.chart.name,score:s})});
+  CHARTS.forEach(c=>{const s=sc(c.name); if(s>0) out.push({kind:"region",chart:c,label:c.name,sub:c.sub,score:s+5})});
+  return out.sort((a,b)=>b.score-a.score);
+}
+function spawn(text){
+  const ex=nodes.find(n=>n.uncharted&&n.label.toLowerCase()===text.toLowerCase()); if(ex) return ex;
+  const ang=Math.random()*6.283, r=Math.max(240,H*.28)/cam.z;
+  const g={id:"u"+nodes.length,chart:null,layer:0,uncharted:true,label:text,alias:"",actor:"",
+    detail:"Not yet charted. Once Psyche is connected to Claude, it will search for this star's links to the rest of the heavens.",holds:"",
+    x:cam.x+Math.cos(ang)*r,y:cam.y+Math.sin(ang)*r};
+  nodes.push(g); byId[g.id]=g; return g;
+}
+function msg(t){$("msg").textContent=t||""}
+
+function focusRegion(c){ selected=null; thread=null; panelOpen=false; renderPanel(); fitTo(nodes.filter(n=>n.chart===c)); }
+function selectNode(id,fly){
+  selected=id; panelOpen=true; renderPanel();
+  if(fly){const n=byId[id]; flyTo(n.x+(W>900?150/1.15:0),n.y,1.15);}
+}
+function resolveField(which){
+  const input=$(which), text=input.value.trim();
+  if(!text) return null;
+  const cur=state[which]&&byId[state[which]]; if(cur&&cur.label===text) return cur.id;
+  const r=search(text,which);
+  if(r.length&&r[0].score>=50){
+    if(r[0].kind==="region"){focusRegion(r[0].chart);return null}
+    input.value=r[0].label; return r[0].id;
+  }
+  const g=spawn(text); return g.id;
+}
+
+/* ---------- threads ---------- */
+function bestPath(src,dst,any){
+  const dist={},prev={},done={}; nodes.forEach(n=>dist[n.id]=Infinity); dist[src]=0;
+  for(;;){
+    let u=null,best=Infinity; for(const n of nodes){if(!done[n.id]&&dist[n.id]<best){best=dist[n.id];u=n.id}}
+    if(u===null||u===dst) break; done[u]=true;
+    for(const e of edges){
+      let v,rev=false; if(e.from===u) v=e.to; else if(any&&e.to===u){v=e.from;rev=true} else continue;
+      const w=-Math.log(e.strength/5)+.05; if(dist[u]+w<dist[v]){dist[v]=dist[u]+w;prev[v]={e,from:u,rev}}
+    }
+  }
+  if(dist[dst]===Infinity) return null;
+  const steps=[]; for(let v=dst;v!==src;v=prev[v].from) steps.unshift({e:prev[v].e,from:prev[v].from,to:v,rev:prev[v].rev});
+  return steps;
+}
+function trace(){
+  const a=state.from,b=state.to; let mode="fwd",steps=bestPath(a,b,false);
+  if(!steps){steps=bestPath(b,a,false);mode="rev"}
+  if(!steps){steps=bestPath(a,b,true);mode="any"}
+  selected=null; panelOpen=true;
+  if(!steps){ thread={none:true,a,b}; fitTo([a,b]); renderPanel(); return; }
+  const order=[steps[0].from,...steps.map(s=>s.to)], sigAt={[order[0]]:1};
+  steps.forEach((s,i)=>{sigAt[s.to]=sigAt[order[i]]*s.e.strength/5});
+  let weak=-1; if(steps.length>1){const m=Math.min(...steps.map(s=>s.e.strength)); if(m<=2) weak=steps.findIndex(s=>s.e.strength===m);}
+  const ms=fitTo(order);
+  thread={steps,order,sigAt,mode,weak,signal:sigAt[order[order.length-1]],start:performance.now()+ms*.55,dur:1000*steps.length};
+  msg(""); renderPanel();
+}
+function clearAll(){
+  state.from=state.to=null; thread=null; selected=null; panelOpen=false; $("from").value=""; $("to").value=""; msg("");
+  renderPanel(); overview();
+}
+
+/* ---------- panel ---------- */
+const ROMAN=["I","II","III","IV","V","VI","VII","VIII","IX","X"];
+const pct=s=>s>=.995?"100%":s<.01?"under 1%":Math.round(s*100)+"%";
+function sigRow(s){return h("div",{class:"sig"},"Signal left",h("i",{},h("b",{style:"width:"+Math.round(s*100)+"%"})),pct(s))}
+function renderPanel(){
+  const p=$("panel"); p.replaceChildren();
+  const show=panelOpen&&(selected||thread); p.hidden=!show; if(!show) return;
+  p.append(h("button",{class:"x",type:"button","aria-label":"Close panel",onclick:()=>{panelOpen=false;selected=null;renderPanel()}},"×"));
+  if(thread){
+    p.append(h("div",{class:"eyebrow"},"The thread"));
+    if(thread.none){
+      p.append(h("h2",{},"No thread yet"),h("p",{},"Psyche knows both stars, but no chain in the charts joins them. When it can reason live, it will search for one."));
+    }else{
+      const n=thread.steps.length;
+      p.append(h("h2",{},n+(n===1?" hop":" hops")+" between them"));
+      if(thread.mode!=="fwd") p.append(h("p",{class:"actor"},thread.mode==="rev"?"Read it backwards: the second star leads to the first.":"These stars are linked, though not in one clear direction of cause."));
+      p.append(sigRow(thread.signal));
+      const list=h("div",{class:"thread"});
+      thread.order.forEach((id,i)=>{
+        if(i>0){const s=thread.steps[i-1];
+          list.append(h("div",{class:"link"+(s.e.echo?" echo":"")+(thread.weak===i-1?" weak":"")},
+            s.e.echo?h("em",{},"Echo across the heavens"):thread.weak===i-1?h("em",{},"Weakest link"):null, s.e.mechanism));}
+        list.append(h("button",{class:"step",type:"button",onclick:()=>selectNode(id,true)},h("span",{class:"n"},ROMAN[i]||String(i+1)),h("span",{class:"t"},byId[id].label)));
+      });
+      p.append(list);
+    }
+    if(selected) p.append(h("hr",{class:"rule"}));
+  }
+  if(selected){
+    const n=byId[selected];
+    p.append(h("div",{class:"eyebrow"},n.uncharted?"Uncharted":n.chart.name),h("h2",{},n.label));
+    if(n.actor) p.append(h("div",{class:"actor"},n.actor));
+    p.append(h("p",{},n.detail));
+    if(n.holds) p.append(h("div",{class:"k"},"Who holds the information"),h("p",{},n.holds));
+    if(thread&&!thread.none&&thread.sigAt[n.id]!=null) p.append(sigRow(thread.sigAt[n.id]));
+  }
+}
+
+/* ---------- finder UI ---------- */
+function wire(which){
+  const input=$(which),list=$(which==="from"?"sugFrom":"sugTo"); let items=[],idx=-1;
+  const draw=()=>{
+    list.replaceChildren(...items.map((it,i)=>{const li=h("li",{role:"option","aria-selected":String(i===idx)},it.label,h("small",{},it.sub)); li.addEventListener("mousedown",e=>{e.preventDefault();pick(it)}); return li}));
+    list.hidden=!items.length; input.setAttribute("aria-expanded",String(!!items.length));
+  };
+  const refresh=()=>{items=search(input.value,which).slice(0,6);idx=-1;draw()};
+  const pick=it=>{
+    items=[];draw(); msg("");
+    if(it.kind==="region"){input.value=it.label;state[which]=null;focusRegion(it.chart);return}
+    state[which]=it.id; input.value=byId[it.id].label;
+    if(state.from&&state.to&&state.from!==state.to) trace(); else selectNode(it.id,true);
+  };
+  input.addEventListener("input",()=>{state[which]=null;refresh()});
+  input.addEventListener("focus",refresh);
+  input.addEventListener("blur",()=>setTimeout(()=>{items=[];draw()},120));
+  input.addEventListener("keydown",e=>{
+    if(e.key==="ArrowDown"&&items.length){e.preventDefault();idx=(idx+1)%items.length;draw()}
+    else if(e.key==="ArrowUp"&&items.length){e.preventDefault();idx=(idx-1+items.length)%items.length;draw()}
+    else if(e.key==="Enter"&&idx>=0){e.preventDefault();pick(items[idx])}
+    else if(e.key==="Escape"){items=[];draw()}
+  });
+}
+wire("from"); wire("to");
+$("finder").addEventListener("submit",e=>{
+  e.preventDefault(); msg("");
+  const a=resolveField("from"),b=resolveField("to"); state.from=a; state.to=b;
+  if(a&&b&&a!==b) trace();
+  else if(a||b) selectNode(a||b,true);
+  else msg("Name an event, or something close to you, and the void will carry you there.");
+});
+$("clear").addEventListener("click",clearAll);
+function demo(a,b){
+  $("from").value=byId[a].label;$("to").value=byId[b].label;state.from=a;state.to=b;msg("");trace();
+}
+const chips=$("chips");
+CHARTS.forEach(c=>chips.append(h("button",{class:"chip",type:"button",onclick:()=>{$("from").value=c.name;$("to").value="";state.from=state.to=null;msg("");focusRegion(c)}},c.name)));
+[["Versailles to the BMC budget","w_a","m_h"],["Midterms to the BMC budget","m_a","m_h"],["An AI chief to grain","d_a","d_g"]]
+  .forEach(([t,a,b])=>chips.append(h("button",{class:"chip",type:"button",onclick:()=>demo(a,b)},t)));
+
+/* ---------- pointer ---------- */
+const ptrs=new Map(); let moved=0,downT=0,pinch=null;
+function pick(px,py){
+  let best=null,bd=20;
+  nodes.forEach(n=>{const d=Math.hypot(sx(n.x)-px,sy(n.y)-py); if(d<bd){bd=d;best=n.id}}); return best;
+}
+cv.addEventListener("pointerdown",e=>{
+  cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); flight=null; cv.classList.add("drag");
+  if(ptrs.size===1){moved=0;downT=performance.now()}
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cam.z}}
+});
+cv.addEventListener("pointermove",e=>{
+  if(ptrs.has(e.pointerId)){
+    const prev=ptrs.get(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(ptrs.size===1){const dx=e.clientX-prev.x,dy=e.clientY-prev.y; cam.x-=dx/cam.z; cam.y-=dy/cam.z; moved+=Math.abs(dx)+Math.abs(dy)}
+    else if(ptrs.size===2&&pinch){const [a,b]=[...ptrs.values()]; cam.z=clamp(pinch.z*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d,ZMIN,ZMAX); moved+=10}
+  }else{ hover=pick(e.clientX,e.clientY); cv.classList.toggle("hot",!!hover); }
+});
+function up(e){
+  const was=ptrs.size; ptrs.delete(e.pointerId); if(!ptrs.size){cv.classList.remove("drag");pinch=null}
+  if(was===1&&moved<5&&performance.now()-downT<600){const id=pick(e.clientX,e.clientY); if(id) selectNode(id,true); else {selected=null;renderPanel()}}
+}
+cv.addEventListener("pointerup",up); cv.addEventListener("pointercancel",e=>{ptrs.delete(e.pointerId);cv.classList.remove("drag")});
+cv.addEventListener("wheel",e=>{e.preventDefault();flight=null;zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*(e.ctrlKey?.01:.0015)))},{passive:false});
+$("zin").addEventListener("click",()=>{flight=null;zoomAt(W/2,H/2,1.4)});
+$("zout").addEventListener("click",()=>{flight=null;zoomAt(W/2,H/2,1/1.4)});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&document.activeElement===document.body){selected=null;panelOpen=false;renderPanel()}});
+
+/* ---------- start ---------- */
+resize(); overview(true);
+new ResizeObserver(()=>{const first=!W;resize();if(first)overview(true)}).observe(document.body);
+try{document.fonts.load('italic 500 17px "Cormorant Garamond"');document.fonts.load('500 17px Cinzel')}catch(_){}
+msg("Name an event, or something close to you, and the void will carry you there.");
+requestAnimationFrame(frame);
+</script>

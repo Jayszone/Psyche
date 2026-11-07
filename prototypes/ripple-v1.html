@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Psyche</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column page. Form on top, then a left-to-right graph where each column is one hop away from the event. */
+:root{
+  --bg:#eaf1f3; --surface:#ffffff; --ink:#0f2329; --muted:#566d75; --line:#c9d8dd;
+  --accent:#0a7388; --accent-ink:#ffffff; --soft:#d9ebf0; --warn:#b4531a;
+  --display:"Bricolage Grotesque","Trebuchet MS",sans-serif;
+  --body:"Figtree",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0a171c; --surface:#122329; --ink:#e3f0f3; --muted:#8fa8b0; --line:#25414a;
+  --accent:#4cc3d6; --accent-ink:#06222a; --soft:#173039; --warn:#f0925a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0a171c; --surface:#122329; --ink:#e3f0f3; --muted:#8fa8b0; --line:#25414a;
+  --accent:#4cc3d6; --accent-ink:#06222a; --soft:#173039; --warn:#f0925a; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;
+  padding-block:32px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1{font:700 clamp(40px,8vw,72px)/0.95 var(--display);letter-spacing:-0.03em;margin:0}
+.lede{max-width:56ch;color:var(--muted);font-size:17px;margin:12px 0 0;text-wrap:pretty}
+.mono{font-family:var(--mono)}
+label{display:block;font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+form{display:grid;grid-template-columns:1fr 1fr auto auto;gap:14px;align-items:end;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+form>div{min-width:0}
+input,select{width:100%;font:500 16px var(--body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+input:focus-visible,select:focus-visible,button:focus-visible,.node:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{font:600 15px var(--body);border:0;border-radius:8px;padding:11px 20px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.5;cursor:default}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chips .lbl{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-right:4px}
+.chip{background:var(--surface);color:var(--ink);border:1px solid var(--line);font-weight:500;font-size:14px;padding:7px 12px;border-radius:99px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.status{font:400 13px var(--mono);color:var(--muted);min-height:20px}
+.status.err{color:var(--warn)}
+
+.head{display:flex;flex-direction:column;gap:6px}
+.head h2{font:700 clamp(22px,3.4vw,30px)/1.15 var(--display);letter-spacing:-0.02em;margin:0;max-width:30ch;text-wrap:balance}
+.head p{margin:0;max-width:68ch;color:var(--muted);text-wrap:pretty}
+
+.scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px}
+.graph{position:relative;display:flex;gap:64px;width:max-content;min-width:100%}
+.graph svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.col{position:relative;display:flex;flex-direction:column;justify-content:center;gap:14px;width:230px;z-index:1}
+.col-h{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.node{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;cursor:pointer;
+  background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;transition:opacity .2s,border-color .2s}
+.node:hover{border-color:var(--accent)}
+.node.root{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.node.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.node.dim{opacity:.35}
+.node .t{font:600 14px/1.25 var(--body);text-wrap:balance}
+.node .a{font:400 11px var(--mono);color:var(--muted)}
+.node.root .a{color:inherit;opacity:.7}
+.sig{display:flex;align-items:center;gap:8px;font:500 11px var(--mono);font-variant-numeric:tabular-nums}
+.sig i{flex:1;height:4px;border-radius:4px;background:var(--line);position:relative;overflow:hidden}
+.sig i b{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:4px}
+.node.root .sig i{background:rgba(255,255,255,.25)}
+.node.root .sig i b{background:var(--bg)}
+.edge{fill:none;stroke:var(--accent);transition:opacity .2s}
+.edge.dim{opacity:.08!important}
+
+.panel{display:grid;grid-template-columns:1.3fr 1fr;gap:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}
+.card h3{font:700 20px/1.2 var(--display);margin:0 0 4px;letter-spacing:-0.01em}
+.card .meta{font:400 12px var(--mono);color:var(--muted);margin-bottom:10px}
+.card p{margin:0 0 10px;text-wrap:pretty}
+.links{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.links li{border-top:1px solid var(--line);padding-top:10px}
+.links b{font-weight:600}
+.dots{font:400 12px var(--mono);color:var(--accent);letter-spacing:2px}
+.side{display:flex;flex-direction:column;gap:18px;min-width:0}
+.k{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.weak .k{color:var(--warn)}
+.foot{font-size:13px;color:var(--muted);max-width:70ch}
+@media (max-width:760px){
+  form{grid-template-columns:1fr}
+  .panel{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Psyche</h1>
+    <p class="lede" style="font-family:var(--display);font-weight:500;font-size:clamp(20px,3vw,26px);color:var(--ink);margin-top:10px">Every event is a butterfly. Find where it lands.</p>
+    <p class="lede">Drop an event in. Pick something close to you. See the chain of hops between them, who holds the information at each step, and how much of the signal is left by the time it arrives.</p>
+  </header>
+
+  <form id="f" autocomplete="off">
+    <div><label for="ev">Something happens</label><input id="ev" value="US midterm elections flip the House"></div>
+    <div><label for="tg">Close to you</label><input id="tg" value="Mumbai's municipal corporation (BMC)"></div>
+    <div><label for="hops">Hops</label>
+      <select id="hops"><option>3</option><option selected>4</option><option>5</option></select></div>
+    <div style="display:flex;gap:8px"><button id="go" type="submit">Trace it</button><button id="stop" class="ghost" type="button" hidden>Stop</button></div>
+  </form>
+
+  <div>
+    <div class="chips" id="chips"><span class="lbl">Examples</span></div>
+    <div class="status" id="status" role="status"></div>
+  </div>
+
+  <section id="out" class="wrap" style="gap:18px"></section>
+
+  <p class="foot">Chains are plausible reasoning, not measured fact. The signal left is the product of each link's strength (1 to 5, divided by 5) along the best route, so it only goes down as you move away from the event. Live traces are written by Claude from general knowledge, with no web lookup.</p>
+</div>
+
+<script>
+const EXAMPLES = [
+ { key:"mumbai", label:"US midterms → Mumbai's BMC",
+   event:"US midterm elections flip the House", target:"Mumbai's municipal corporation (BMC)", hops:4,
+   summary:"A change in who controls the US House mostly travels through money: trade policy odds, the dollar, foreign fund flows, then state and city revenue.",
+   nodes:[
+    {id:"a",layer:0,label:"US House changes hands",actor:"US voters, Congress",detail:"A divided Congress changes what the White House can pass on trade, tax and spending.",holds:"Polling firms and campaign finance filings know the odds first."},
+    {id:"b",layer:1,label:"Tariff and trade odds shift",actor:"White House, USTR",detail:"A Congress that can block or investigate changes how credible new tariff threats are.",holds:"Trade lobbyists and exporters' associations read this earliest."},
+    {id:"c",layer:1,label:"Dollar and Fed expectations move",actor:"Bond and FX desks",detail:"Divided government tends to mean less fiscal stimulus, which changes rate and dollar expectations.",holds:"Bank treasuries and the Fed itself."},
+    {id:"d",layer:2,label:"Indian IT and export stocks reprice",actor:"Nifty IT, exporters",detail:"Services exporters earn in dollars and are sensitive to US visa, outsourcing and tariff talk.",holds:"Sell-side analysts and company CFOs."},
+    {id:"e",layer:2,label:"Rupee and foreign fund flows swing",actor:"RBI, FPIs",detail:"Risk appetite and dollar strength decide whether foreign money enters or leaves Indian markets.",holds:"RBI's reserve desk and custodian banks."},
+    {id:"f",layer:3,label:"Maharashtra's tax take shifts",actor:"State finance dept",detail:"GST and corporate income in Mumbai-based firms drive the state's receipts and its transfers to cities.",holds:"The state finance department, months later."},
+    {id:"g",layer:3,label:"Mumbai property deals speed up or stall",actor:"Developers, buyers",detail:"Foreign money and IT salaries feed housing demand, which drives stamp duty and property tax.",holds:"The sub-registrar's office and developer sales teams."},
+    {id:"h",layer:4,label:"BMC capital budget and project timing",actor:"BMC commissioner",detail:"The corporation's roads, drains and coastal projects depend on property tax, premiums and state grants.",holds:"Only the BMC budget office sees the final numbers."}
+   ],
+   edges:[
+    {from:"a",to:"b",mechanism:"A new House can block or probe tariff plans.",strength:4},
+    {from:"a",to:"c",mechanism:"Fiscal policy odds change rate expectations.",strength:3},
+    {from:"b",to:"d",mechanism:"Tariff and visa talk hits dollar earners.",strength:3},
+    {from:"b",to:"e",mechanism:"Trade risk changes foreign appetite for India.",strength:3},
+    {from:"c",to:"e",mechanism:"A stronger dollar pulls money out of emerging markets.",strength:4},
+    {from:"d",to:"f",mechanism:"IT firms' profits feed state-level tax receipts.",strength:2},
+    {from:"e",to:"g",mechanism:"Foreign capital reaches Mumbai real estate.",strength:3},
+    {from:"e",to:"f",mechanism:"The rupee changes import costs and GST collected.",strength:2},
+    {from:"f",to:"h",mechanism:"State grants fund part of BMC projects.",strength:3},
+    {from:"g",to:"h",mechanism:"Property tax and premiums fund the capital budget.",strength:4}
+   ],
+   weak:{from:"d",to:"f",why:"IT profits reach state revenue only through slow, indirect tax lines. Other forces swamp this link."},
+   missing:"BMC's quarterly property-tax collection, the state's GST by sector, and how much of BMC's capital budget is borrowed or grant-funded."},
+ { key:"wwi", label:"Versailles → WWII",
+   event:"The Treaty of Versailles is signed (1919)", target:"The outbreak of World War II in Europe", hops:4,
+   summary:"The treaty did not cause the war alone. It set up grievances and weak institutions, and the Depression turned those into a movement.",
+   nodes:[
+    {id:"a",layer:0,label:"Treaty of Versailles signed",actor:"Allied leaders",detail:"Germany signs under blockade threat, without a say in the terms.",holds:"The Allied delegations wrote the terms behind closed doors."},
+    {id:"b",layer:1,label:"War guilt clause and reparations",actor:"Allied governments",detail:"Germany must accept blame and pay a bill that is large and vague.",holds:"The Reparations Commission, which set the figure in 1921."},
+    {id:"c",layer:1,label:"Army cap and lost territory",actor:"Allied military boards",detail:"A 100,000 man army, lost land in the east and west, and the Rhineland demilitarised.",holds:"Border commissions and German army staff."},
+    {id:"d",layer:2,label:"Hyperinflation of 1923",actor:"Reichsbank, French army",detail:"Missed payments, the Ruhr occupation and money printing wipe out savings.",holds:"Reichsbank officials and large industrialists."},
+    {id:"e",layer:2,label:"Stab-in-the-back myth spreads",actor:"Veterans, nationalist press",detail:"The claim that Germany was betrayed at home, not beaten, gives the humiliation a villain.",holds:"The army high command knew the military facts."},
+    {id:"f",layer:3,label:"Depression ends US loans",actor:"US banks, voters",detail:"Germany's recovery ran on American credit. When it stopped, unemployment soared.",holds:"Wall Street banks and the Dawes Plan bankers."},
+    {id:"g",layer:3,label:"Weimar loses legitimacy",actor:"Parties, president",detail:"Voters see the republic as the author of the treaty and the slump.",holds:"Local party offices and voters themselves."},
+    {id:"h",layer:4,label:"Nazis take power and rearm",actor:"Hitler, industrial backers",detail:"Treaty limits are broken one by one in the 1930s, and Britain and France hesitate.",holds:"Intelligence services saw rearmament long before leaders acted."}
+   ],
+   edges:[
+    {from:"a",to:"b",mechanism:"The treaty text imposes blame and a bill.",strength:5},
+    {from:"a",to:"c",mechanism:"The treaty text sets military and border limits.",strength:5},
+    {from:"b",to:"d",mechanism:"Payment pressure meets money printing.",strength:4},
+    {from:"b",to:"e",mechanism:"Guilt clause fuels a story of unfair defeat.",strength:3},
+    {from:"c",to:"e",mechanism:"Lost land and army cuts feed resentment.",strength:3},
+    {from:"d",to:"g",mechanism:"Middle-class savings vanish and trust goes with them.",strength:4},
+    {from:"d",to:"f",mechanism:"Fragile finances leave Germany reliant on US loans.",strength:3},
+    {from:"f",to:"g",mechanism:"Mass unemployment deepens anger at the republic.",strength:4},
+    {from:"e",to:"h",mechanism:"The myth gives the Nazis a ready-made story.",strength:3},
+    {from:"g",to:"h",mechanism:"A discredited republic opens the door to extremes.",strength:4}
+   ],
+   weak:{from:"e",to:"h",why:"Historians disagree on how much the myth mattered compared with the Depression."},
+   missing:"Voting records by region, what each Allied cabinet really intended in 1919, and how many alternative paths existed after 1933."},
+ { key:"grain", label:"New AI chief → Indian grain prices",
+   event:"A frontier AI lab appoints a new head of AI", target:"Wheat and rice prices in India", hops:4,
+   summary:"Every link here is real but small. By the time the ripple reaches the mandi, monsoon, MSP and export policy have drowned it out.",
+   nodes:[
+    {id:"a",layer:0,label:"New AI chief appointed",actor:"Frontier AI lab",detail:"A leadership change at a lab, announced by press release.",holds:"The board and the lab's own staff."},
+    {id:"b",layer:1,label:"Model roadmap and release pace shift",actor:"Lab research teams",detail:"A new leader may speed up, slow down or redirect what gets built.",holds:"Internal roadmaps are not public."},
+    {id:"c",layer:2,label:"Farm-tech and logistics tools change",actor:"Agri-tech startups",detail:"Better models make crop advice, route planning and quality grading cheaper.",holds:"Startups and farm cooperatives see early adoption."},
+    {id:"d",layer:2,label:"Compute and power demand expectations",actor:"Chip makers, utilities",detail:"A bigger roadmap implies more data centres drawing power and water.",holds:"Cloud providers and grid operators."},
+    {id:"e",layer:3,label:"Crop forecasts and price discovery sharpen",actor:"Mandis, traders",detail:"Traders with better forecasts store and move grain with less waste.",holds:"Large commodity traders, and FCI stock data."},
+    {id:"f",layer:3,label:"Regional power and water stress",actor:"State utilities",detail:"Data centre growth competes with farms for electricity and water in some regions.",holds:"State electricity boards and groundwater agencies."},
+    {id:"g",layer:4,label:"Wheat and rice prices in India",actor:"Farmers, FCI, consumers",detail:"Prices are set mainly by monsoon, MSP, FCI stock and export bans.",holds:"The Ministry of Agriculture and FCI."}
+   ],
+   edges:[
+    {from:"a",to:"b",mechanism:"A leader steers the research agenda.",strength:3},
+    {from:"b",to:"c",mechanism:"New tools reach agri-tech firms with a lag.",strength:2},
+    {from:"b",to:"d",mechanism:"Bigger models mean more compute.",strength:2},
+    {from:"c",to:"e",mechanism:"Better forecasts reach traders slowly.",strength:2},
+    {from:"d",to:"f",mechanism:"Data centres draw regional power and water.",strength:1},
+    {from:"e",to:"g",mechanism:"Small efficiency gains nudge prices.",strength:1},
+    {from:"f",to:"g",mechanism:"Local stress could touch irrigation, in theory.",strength:1}
+   ],
+   weak:{from:"e",to:"g",why:"Monsoon, MSP and export policy move grain prices far more than any trading tool."},
+   missing:"Actual adoption numbers for AI tools among Indian traders, plus any data-centre sites near major wheat or rice belts."}
+];
+
+const $ = id => document.getElementById(id);
+function h(tag, props, ...kids){
+  const el = document.createElement(tag);
+  for (const k in (props||{})){
+    if (k==="class") el.className = props[k];
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), props[k]);
+    else el.setAttribute(k, props[k]);
+  }
+  for (const c of kids.flat()) if (c!=null) el.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return el;
+}
+const NS = "http://www.w3.org/2000/svg";
+
+let model = null, selected = null, sample = null, ctl = null, activeKey = null;
+
+// ---- model prep: validate, compute signal left
+function prep(raw){
+  const nodes = (raw.nodes||[]).filter(n=>n&&n.id!=null&&n.label).map(n=>({
+    id:String(n.id), layer:Math.max(0,Math.min(6,Math.round(Number(n.layer)||0))),
+    label:String(n.label), actor:String(n.actor||""), detail:String(n.detail||""), holds:String(n.holds||"")}));
+  const byId = Object.fromEntries(nodes.map(n=>[n.id,n]));
+  const edges = (raw.edges||[]).map(e=>({from:String(e.from),to:String(e.to),
+      mechanism:String(e.mechanism||""),strength:Math.max(1,Math.min(5,Math.round(Number(e.strength)||1)))}))
+    .filter(e=>byId[e.from]&&byId[e.to]&&byId[e.from].layer<byId[e.to].layer);
+  nodes.forEach(n=>n.sig = n.layer===0?1:0);
+  [...nodes].sort((a,b)=>a.layer-b.layer).forEach(n=>{
+    if (n.layer===0) return;
+    for (const e of edges) if (e.to===n.id) n.sig = Math.max(n.sig, byId[e.from].sig*e.strength/5);
+  });
+  return {event:raw.event,target:raw.target,summary:String(raw.summary||""),nodes,edges,
+    weak:raw.weak||null,missing:String(raw.missing||"")};
+}
+const pct = s => s>=0.995?"100%":s<=0?"–":s<0.01?"<1%":Math.round(s*100)+"%";
+
+// ---- rendering
+function upstream(id){
+  const keep = new Set([id]), ek = new Set();
+  const walk = t => model.edges.forEach(e=>{ if(e.to===t){ ek.add(e.from+">"+e.to); if(!keep.has(e.from)){keep.add(e.from);walk(e.from);} } });
+  walk(id); return {keep,ek};
+}
+
+function render(){
+  const out = $("out"); out.replaceChildren();
+  if (!model) return;
+  out.append(h("div",{class:"head"}, h("h2",{}, model.event+" → "+model.target), h("p",{},model.summary)));
+
+  const layers = [...new Set(model.nodes.map(n=>n.layer))].sort((a,b)=>a-b);
+  const maxL = layers[layers.length-1];
+  const graph = h("div",{class:"graph",id:"graph"});
+  const svg = document.createElementNS(NS,"svg"); svg.id="edges"; graph.append(svg);
+  layers.forEach(L=>{
+    const col = h("div",{class:"col"}, h("div",{class:"col-h"}, L===0?"Event":L===maxL?"Lands on you":"Hop "+L));
+    model.nodes.filter(n=>n.layer===L).forEach(n=>{
+      const b = h("button",{class:"node"+(L===0?" root":""),type:"button","data-id":n.id,"aria-label":n.label+", signal left "+pct(n.sig),
+          onclick:()=>select(n.id), onmouseenter:()=>hl(n.id), onmouseleave:()=>hl(selected)},
+        h("span",{class:"t"},n.label), h("span",{class:"a"},n.actor),
+        h("span",{class:"sig"}, h("i",{},h("b",{style:"width:"+Math.round(n.sig*100)+"%"})), pct(n.sig)));
+      col.append(b);
+    });
+    graph.append(col);
+  });
+  out.append(h("div",{class:"scroll"},graph));
+  out.append(h("div",{class:"panel"}, h("div",{class:"card",id:"detail"}), h("div",{class:"side",id:"side"})));
+  side();
+  select(model.nodes.find(n=>n.layer===maxL)?.id ?? model.nodes[0].id);
+  requestAnimationFrame(draw);
+}
+
+function draw(){
+  const g = $("graph"), svg = $("edges"); if(!g||!svg) return;
+  svg.replaceChildren();
+  const gr = g.getBoundingClientRect();
+  svg.setAttribute("viewBox",`0 0 ${gr.width} ${gr.height}`);
+  model.edges.forEach(e=>{
+    const a = g.querySelector(`[data-id="${CSS.escape(e.from)}"]`), b = g.querySelector(`[data-id="${CSS.escape(e.to)}"]`);
+    if(!a||!b) return;
+    const ra=a.getBoundingClientRect(), rb=b.getBoundingClientRect();
+    const x1=ra.right-gr.left, y1=ra.top+ra.height/2-gr.top, x2=rb.left-gr.left, y2=rb.top+rb.height/2-gr.top, dx=(x2-x1)*0.5;
+    const p = document.createElementNS(NS,"path");
+    p.setAttribute("d",`M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`);
+    p.setAttribute("class","edge"); p.setAttribute("data-k",e.from+">"+e.to);
+    p.setAttribute("stroke-width",(0.8+e.strength*0.55).toFixed(2));
+    p.style.opacity = (0.25+e.strength*0.14).toFixed(2);
+    svg.append(p);
+  });
+  hl(selected);
+}
+
+function hl(id){
+  const g=$("graph"); if(!g) return;
+  const all = g.querySelectorAll(".node"), edges = g.querySelectorAll(".edge");
+  if(!id){ all.forEach(n=>n.classList.remove("dim")); edges.forEach(e=>e.classList.remove("dim")); return; }
+  const {keep,ek}=upstream(id);
+  all.forEach(n=>n.classList.toggle("dim",!keep.has(n.dataset.id)));
+  edges.forEach(e=>e.classList.toggle("dim",!ek.has(e.dataset.k)));
+}
+
+function select(id){
+  selected = id;
+  document.querySelectorAll(".node").forEach(n=>n.classList.toggle("sel",n.dataset.id===id));
+  const n = model.nodes.find(x=>x.id===id), byId = Object.fromEntries(model.nodes.map(x=>[x.id,x]));
+  const d = $("detail"); d.replaceChildren();
+  d.append(h("div",{class:"meta"},"Signal left "+pct(n.sig)+(n.actor?" · "+n.actor:"")), h("h3",{},n.label), h("p",{},n.detail));
+  if(n.holds) d.append(h("div",{class:"k"},"Who holds the information"), h("p",{},n.holds));
+  const inc = model.edges.filter(e=>e.to===id);
+  if(inc.length){
+    d.append(h("div",{class:"k"},"How it gets here"));
+    d.append(h("ul",{class:"links"}, inc.map(e=>h("li",{},
+      h("b",{},byId[e.from].label), " ", h("span",{class:"dots","aria-label":"strength "+e.strength+" of 5"},"●".repeat(e.strength)+"○".repeat(5-e.strength)),
+      h("div",{},e.mechanism)))));
+  }
+  hl(id);
+}
+
+function side(){
+  const s=$("side"), byId=Object.fromEntries(model.nodes.map(x=>[x.id,x]));
+  s.replaceChildren();
+  const w=model.weak;
+  if(w && byId[w.from] && byId[w.to]) s.append(h("div",{class:"card weak"},h("div",{class:"k"},"Weakest link"),
+    h("p",{},h("b",{},byId[w.from].label+" → "+byId[w.to].label)),h("p",{},String(w.why||""))));
+  if(model.missing) s.append(h("div",{class:"card"},h("div",{class:"k"},"What you'd need to actually know"),h("p",{},model.missing)));
+}
+
+// ---- examples
+function loadExample(ex){
+  activeKey = ex.key;
+  $("ev").value = ex.event; $("tg").value = ex.target; $("hops").value = String(ex.hops);
+  model = prep(ex); status("");
+  chips(); render();
+}
+function chips(){
+  const c=$("chips"); c.replaceChildren(h("span",{class:"lbl"},"Examples"));
+  EXAMPLES.forEach(ex=>c.append(h("button",{class:"chip",type:"button","aria-pressed":String(activeKey===ex.key),onclick:()=>loadExample(ex)},ex.label)));
+}
+function status(t,err){ const s=$("status"); s.textContent=t; s.className="status"+(err?" err":""); }
+
+// ---- live tracing with Claude
+function promptFor(ev,tg,hops){
+  return `You build causal "ripple" graphs. Trace how this event propagates until it reaches the target.
+
+EVENT: ${ev}
+TARGET (something close to the viewer): ${tg}
+HOPS: exactly ${hops} hops after the event, so layers 0 to ${hops}. Layer 0 is the event. The final layer holds the effect on the target.
+
+Rules:
+- 6 to 10 nodes total, 1 to 3 per layer, with at least one node on every layer.
+- Every non-root node needs at least one incoming edge from a lower layer. Branching and merging is welcome.
+- Each edge has a "mechanism" (one plain sentence on HOW the effect passes) and a "strength" integer 1-5 (5 = near-certain and large, 1 = real but tiny or speculative). Be honest: long chains between unrelated things should have weak links.
+- Each node has "actor" (who or what carries the change), "detail" (1-2 sentences) and "holds" (who owns the information about this step, and how it is visible).
+- Name real institutions, markets, laws and places. No made-up statistics.
+- Keep labels under 7 words.
+
+Reply with only JSON in this shape:
+{"summary":"1-2 sentences on the overall shape of the chain","nodes":[{"id":"a","layer":0,"label":"...","actor":"...","detail":"...","holds":"..."}],"edges":[{"from":"a","to":"b","mechanism":"...","strength":3}],"weak":{"from":"id","to":"id","why":"..."},"missing":"what data you would need to verify this chain"}`;
+}
+const ERR = {not_granted:"Claude access was declined for this page. The examples still work.",
+  rate_limited:"Too many requests just now. Wait a bit and try again.",
+  invalid_json:"Claude's answer was not a valid graph. Try again, or try fewer hops.",
+  refused:"Claude declined that one. Try rewording the event.",
+  session_expired:"Sign in again to keep tracing."};
+
+$("f").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const ev=$("ev").value.trim(), tg=$("tg").value.trim(), hops=Number($("hops").value);
+  if(!ev||!tg){ status("Fill in both the event and what is close to you.",true); return; }
+  if(!sample){ status("Live tracing needs Claude access in this view. Try an example.",true); return; }
+  ctl = new AbortController();
+  $("go").disabled=true; $("stop").hidden=false; status("Tracing the chain… this takes up to a minute.");
+  try{
+    const raw = await sample.json(promptFor(ev,tg,hops), {signal:ctl.signal});
+    const m = prep({...raw,event:ev,target:tg});
+    if(m.nodes.length<3||!m.edges.length) throw {code:"invalid_json"};
+    model=m; activeKey=null; chips(); render(); status("");
+  }catch(err){
+    if(err&&err.code==="cancelled") status("Stopped.");
+    else status(ERR[err&&err.code]||"Something went wrong while tracing. Try again.",true);
+  }finally{ $("go").disabled=false; $("stop").hidden=true; ctl=null; }
+});
+$("stop").addEventListener("click",()=>ctl&&ctl.abort());
+
+new ResizeObserver(()=>{ if(model) draw(); }).observe(document.body);
+loadExample(EXAMPLES[0]);
+(async()=>{
+  try{ sample = await window.claude?.use("sample"); }catch(_){ sample=null; }
+  if(!sample){ $("go").disabled=true; $("go").title="Live tracing is not available in this view"; status("Live tracing is not available in this view. The examples still work."); }
+})();
+</script>
+
+</body>
+</html>
